@@ -1,0 +1,21 @@
+{
+  "_comment": "Default department-ROUTING rules. Symptom keywords map to a department name for booking purposes ONLY. This is not a diagnostic tool. Loaded into the symptom_routing_rules collection when it is empty; afterwards admins manage rules through the API.",
+  "rules": [
+    {"department_name": "General Medicine", "weight": 1.0, "keywords": ["fever", "headache", "body pain", "body ache", "cold", "cough", "sore throat", "fatigue", "tiredness", "weakness", "chills", "runny nose", "sneezing", "loss of appetite", "general check up"]},
+    {"department_name": "Cardiology", "weight": 2.0, "keywords": ["chest pain", "chest tightness", "palpitations", "racing heart", "irregular heartbeat", "swollen ankles"]},
+    {"department_name": "Pulmonology", "weight": 2.0, "keywords": ["shortness of breath", "breathlessness", "wheezing", "persistent cough", "cough for weeks"]},
+    {"department_name": "Dermatology", "weight": 2.0, "keywords": ["rash", "skin rash", "itching", "itchy skin", "acne", "hives", "skin redness", "dry skin", "hair fall", "hair loss", "dandruff", "blisters"]},
+    {"department_name": "Orthopedics", "weight": 2.0, "keywords": ["joint pain", "knee pain", "back pain", "neck pain", "shoulder pain", "stiff joints", "bone pain", "sprain", "swollen joint"]},
+    {"department_name": "ENT", "weight": 2.0, "keywords": ["ear pain", "earache", "hearing loss", "blocked nose", "sinus pressure", "nosebleed", "ringing in ears", "hoarseness", "throat pain"]},
+    {"department_name": "Gastroenterology", "weight": 2.0, "keywords": ["stomach pain", "abdominal pain", "nausea", "vomiting", "diarrhea", "constipation", "acidity", "heartburn", "bloating", "indigestion"]},
+    {"department_name": "Neurology", "weight": 2.0, "keywords": ["dizziness", "numbness", "tingling", "migraine", "tremor", "fainting", "memory problems"]},
+    {"department_name": "Gynecology", "weight": 2.0, "keywords": ["irregular periods", "menstrual pain", "missed period", "pelvic pain"]},
+    {"department_name": "Ophthalmology", "weight": 2.0, "keywords": ["eye pain", "blurred vision", "red eyes", "watery eyes", "itchy eyes"]},
+    {"department_name": "Urology", "weight": 2.0, "keywords": ["painful urination", "frequent urination", "blood in urine"]},
+    {"department_name": "Endocrinology", "weight": 2.0, "keywords": ["excessive thirst", "unexplained weight loss", "unexplained weight gain"]},
+    {"department_name": "Dentistry", "weight": 2.0, "keywords": ["toothache", "tooth pain", "gum bleeding", "jaw pain"]},
+    {"department_name": "Pediatrics", "weight": 1.5, "keywords": ["infant", "toddler", "baby", "child"]},
+    {"department_name": "Psychiatry", "weight": 2.0, "keywords": ["anxiety", "low mood", "trouble sleeping", "panic", "stress", "sadness"]},
+    {"department_name": "Emergency Medicine", "weight": 5.0, "is_emergency": true, "keywords": ["severe chest pain", "difficulty breathing", "unconscious", "heavy bleeding", "face drooping", "slurred speech", "severe allergic reaction", "suicidal thoughts", "self harm", "seizure"]}
+  ]
+}
