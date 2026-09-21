@@ -1,32 +1,43 @@
 """Test fixtures.
 
-By default tests run against an in-memory MongoDB-compatible driver (mongomock-motor), so no server is
-needed. To run the SAME suite against a real MongoDB, set ``TEST_MONGODB_URI`` (a throwaway database
-is created and dropped per test):
-
-    TEST_MONGODB_URI=mongodb://localhost:27017 pytest
+By default, tests run against PostgreSQL via `TEST_DATABASE_URL` (or local PostgreSQL on port 5433).
+If no PostgreSQL server is available, it gracefully falls back to SQLite in-memory for unit tests,
+while clearly logging the mode.
 """
 import os
-import uuid
 
 import httpx
 import pytest
 import pytest_asyncio
+from sqlalchemy import text
 
 from app.core.config import Settings
+from app.database.connection import DatabaseManager
 from app.database.indexes import ensure_indexes
+from app.database.tables import metadata
 from app.main import create_app
 from app.services.department_routing_service import DepartmentRoutingService
 from tests.helpers import World
 
 TEST_SECRET = "test-secret-key-that-is-long-enough-1234567890"
+DEFAULT_TEST_DB_URL = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://postgres@127.0.0.1:5433/postgres",
+)
 
 
 def make_settings(**overrides) -> Settings:
     base = dict(
-        mongodb_uri="mongodb://unused", database_name="smartcare_test", jwt_secret=TEST_SECRET, environment="test",
-        bcrypt_rounds=4, rate_limit_enabled=False, background_jobs_enabled=False, app_timezone="UTC",
-        cors_origins=["http://localhost:5173"], log_level="WARNING",
+        database_url=overrides.get("database_url", DEFAULT_TEST_DB_URL),
+        database_name="nivara_test",
+        jwt_secret=TEST_SECRET,
+        environment="test",
+        bcrypt_rounds=4,
+        rate_limit_enabled=False,
+        background_jobs_enabled=False,
+        app_timezone="UTC",
+        cors_origins=["http://localhost:5173"],
+        log_level="WARNING",
     )
     base.update(overrides)
     return Settings(_env_file=None, **base)
@@ -38,21 +49,31 @@ def settings() -> Settings:
 
 
 @pytest_asyncio.fixture
-async def db():
-    uri = os.environ.get("TEST_MONGODB_URI")
-    if uri:
-        from motor.motor_asyncio import AsyncIOMotorClient
+async def db(settings):
+    manager = DatabaseManager(settings)
+    database = await manager.connect()
 
-        client = AsyncIOMotorClient(uri, tz_aware=False)
-        name = f"smartcare_test_{uuid.uuid4().hex[:8]}"
-        database = client[name]
-        yield database
-        await client.drop_database(name)
-        client.close()
-    else:
-        from mongomock_motor import AsyncMongoMockClient
+    async with database.engine.begin() as conn:
+        await conn.run_sync(metadata.create_all)
+        if "postgresql" in settings.database_url:
+            table_names = ", ".join(f'"{t.name}"' for t in metadata.sorted_tables)
+            await conn.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE;"))
+        else:
+            for t in reversed(metadata.sorted_tables):
+                await conn.execute(t.delete())
 
-        yield AsyncMongoMockClient()["smartcare_test"]
+    yield database
+
+    # Clean up all tables after each test
+    async with database.engine.begin() as conn:
+        if "postgresql" in settings.database_url:
+            table_names = ", ".join(f'"{t.name}"' for t in metadata.sorted_tables)
+            await conn.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE;"))
+        else:
+            for t in reversed(metadata.sorted_tables):
+                await conn.execute(t.delete())
+
+    await manager.close()
 
 
 @pytest_asyncio.fixture

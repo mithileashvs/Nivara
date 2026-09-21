@@ -1,22 +1,26 @@
-# Minimal development setup: the FastAPI backend + MongoDB. Nothing else.
+# Minimal development setup: the FastAPI backend + PostgreSQL. Nothing else.
 #
 # Usage:
-#   docker compose up --build          # start backend + MongoDB
-#   docker compose exec backend python scripts/seed.py   # seed development data
-#   docker compose down -v             # stop and wipe the MongoDB volume
+#   docker compose up --build          # start backend + PostgreSQL
+#   docker compose exec backend python -m scripts.seed   # seed development data
+#   docker compose down -v             # stop and wipe the PostgreSQL volume
 #
 # The app also runs perfectly well without Docker — see the README's "Installation" section.
 
 services:
-  mongodb:
-    image: mongo:7
+  postgres:
+    image: postgres:16-alpine
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: nivara
     volumes:
-      - mongo-data:/data/db
+      - pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nivara"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -29,8 +33,8 @@ services:
       - "8000:8000"
     environment:
       ENVIRONMENT: development
-      MONGODB_URI: mongodb://mongodb:27017
-      DATABASE_NAME: smartcare
+      DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@postgres:5432/nivara
+      DATABASE_NAME: nivara
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-please-1234567890}
       JWT_ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: "60"
@@ -42,8 +46,8 @@ services:
       - ./app:/app/app
       - ./scripts:/app/scripts
     depends_on:
-      mongodb:
+      postgres:
         condition: service_healthy
 
 volumes:
-  mongo-data:
+  pg-data:

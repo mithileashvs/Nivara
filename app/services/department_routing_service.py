@@ -9,10 +9,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from pymongo.errors import DuplicateKeyError  # noqa: F401
-
 from app.core.errors import NotFoundError
 from app.database.collections import C
+from app.database.session import DuplicateKeyError  # noqa: F401
 from app.models.engagement import SymptomRoutingRule
 from app.models.enums import DepartmentStatus, IntakeStatus
 from app.schemas.admin import RoutingRuleCreate, RoutingRuleUpdate
@@ -33,7 +32,7 @@ OUT_OF_SCOPE = re.compile(
     re.IGNORECASE,
 )
 OUT_OF_SCOPE_REASON = (
-    "SmartCare does not diagnose conditions or recommend medicines, dosages or treatment, "
+    "Nivara does not diagnose conditions or recommend medicines, dosages or treatment, "
     "so this input was ignored. Only symptoms are used, and only to pick a department."
 )
 EMERGENCY_NOTICE = (

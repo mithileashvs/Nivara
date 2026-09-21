@@ -1,8 +1,6 @@
 """Resolves which hospitals/departments are currently accepting new appointment requests."""
 from typing import Any
 
-from bson import ObjectId
-
 from app.database.collections import C
 from app.models.enums import DepartmentStatus, IntakeStatus
 
@@ -14,9 +12,9 @@ class IntakeService:
     async def open_scope(
         self,
         *,
-        hospital_ids: list[ObjectId] | None = None,
-        department_ids: list[ObjectId] | None = None,
-    ) -> tuple[list[ObjectId], list[ObjectId]]:
+        hospital_ids: list[Any] | None = None,
+        department_ids: list[Any] | None = None,
+    ) -> tuple[list[str], list[str]]:
         """Return ``(open_hospital_ids, open_department_ids)``.
 
         A department is open only if it is ACTIVE with intake OPEN *and* its hospital is OPEN.
@@ -26,7 +24,7 @@ class IntakeService:
         if hospital_ids is not None:
             hq["_id"] = {"$in": hospital_ids}
         hospitals = await self.db[C.HOSPITALS].find(hq, {"_id": 1}).to_list(length=5000)
-        open_hospitals = [h["_id"] for h in hospitals]
+        open_hospitals = [str(h["_id"]) for h in hospitals]
         if not open_hospitals:
             return [], []
 
@@ -38,18 +36,18 @@ class IntakeService:
         if department_ids is not None:
             dq["_id"] = {"$in": department_ids}
         departments = await self.db[C.DEPARTMENTS].find(dq, {"_id": 1}).to_list(length=20000)
-        return open_hospitals, [d["_id"] for d in departments]
+        return open_hospitals, [str(d["_id"]) for d in departments]
 
     async def load_context(
-        self, hospital_ids: set[ObjectId], department_ids: set[ObjectId]
-    ) -> tuple[dict[ObjectId, dict], dict[ObjectId, dict]]:
+        self, hospital_ids: set[Any], department_ids: set[Any]
+    ) -> tuple[dict[str, dict], dict[str, dict]]:
         """Batch-load hospitals and departments keyed by id."""
         hospitals = {}
         departments = {}
         if hospital_ids:
             async for h in self.db[C.HOSPITALS].find({"_id": {"$in": list(hospital_ids)}}):
-                hospitals[h["_id"]] = h
+                hospitals[str(h["_id"])] = h
         if department_ids:
             async for d in self.db[C.DEPARTMENTS].find({"_id": {"$in": list(department_ids)}}):
-                departments[d["_id"]] = d
+                departments[str(d["_id"])] = d
         return hospitals, departments

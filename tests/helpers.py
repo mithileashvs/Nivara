@@ -1,8 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from bson import ObjectId
-
 from app.core.security import hash_password
 from app.models.users import User
 from app.models.enums import UserRole
@@ -60,7 +58,7 @@ class World:
 
     async def create_admin_direct(self, email: str, managed_hospital_ids: list[str] | None = None) -> Person:
         user = User(name="Admin " + email.split("@")[0], email=email, password_hash=hash_password(PASSWORD, 4), role=UserRole.ADMIN,
-                    managed_hospital_ids=[ObjectId(h) for h in managed_hospital_ids] if managed_hospital_ids is not None else None).to_mongo()
+                    managed_hospital_ids=managed_hospital_ids).to_mongo()
         await self.db["users"].insert_one(user)
         return Person(str(user["_id"]), str(user["_id"]), user["name"], email, await self._login(email), str(user["_id"]))
 
@@ -128,7 +126,7 @@ class World:
         return appt
 
     async def slot_doc(self, slot_id: str) -> dict:
-        return await self.db["appointment_slots"].find_one({"_id": ObjectId(slot_id)})
+        return await self.db["appointment_slots"].find_one({"_id": slot_id})
 
     async def notifications(self, person: Person, type: str | None = None) -> list[dict]:
         r = await self.api("GET", "/notifications?page_size=100", person)
@@ -137,7 +135,7 @@ class World:
 
     async def make_started(self, appointment_id: str) -> None:
         """Move an appointment (and its slot) into the past so it can be completed / marked no-show."""
-        appt = await self.db["appointments"].find_one({"_id": ObjectId(appointment_id)})
+        appt = await self.db["appointments"].find_one({"_id": appointment_id})
         past = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2)
         await self.db["appointments"].update_one({"_id": appt["_id"]}, {"$set": {"start_at": past, "end_at": past + timedelta(minutes=30)}})
         await self.db["appointment_slots"].update_one({"_id": appt["slot_id"]}, {"$set": {"start_at": past, "end_at": past + timedelta(minutes=30)}})

@@ -69,13 +69,14 @@ class MatchingConfig(BaseModel):
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_name: str = "SmartCare API"
+    app_name: str = "Nivara API"
     app_version: str = "1.0.0"
     environment: Literal["development", "test", "production"] = "development"
 
     # --- database ---
-    mongodb_uri: str
-    database_name: str = "smartcare"
+    database_url: str = Field(default="postgresql+asyncpg://postgres:postgres@localhost:5432/nivara")
+    database_name: str = "nivara"
+    mongodb_uri: str | None = None  # kept optional for legacy config compatibility
 
     # --- auth ---
     jwt_secret: SecretStr

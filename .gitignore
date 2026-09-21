@@ -23,3 +23,8 @@ htmlcov/
 # Local data
 *.log
 mongo-data/
+pg_dist/
+pg_extract/
+pg_data/
+pg_bin.jar
+*.db

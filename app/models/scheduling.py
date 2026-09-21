@@ -1,15 +1,13 @@
 from datetime import datetime
 
-from bson import ObjectId
-
-from app.models.base import MongoModel
+from app.models.base import EntityModel
 from app.models.enums import AvailabilityStatus, SlotStatus
 
 
-class DoctorAvailability(MongoModel):
-    doctor_id: ObjectId
-    hospital_id: ObjectId
-    department_id: ObjectId
+class DoctorAvailability(EntityModel):
+    doctor_id: str
+    hospital_id: str
+    department_id: str
     date: str  # "YYYY-MM-DD" (clinic-local)
     start_time: str  # "HH:MM"
     end_time: str
@@ -18,18 +16,18 @@ class DoctorAvailability(MongoModel):
     note: str | None = None
 
 
-class AppointmentSlot(MongoModel):
-    doctor_id: ObjectId
-    hospital_id: ObjectId
-    department_id: ObjectId
+class AppointmentSlot(EntityModel):
+    doctor_id: str
+    hospital_id: str
+    department_id: str
     date: str
     start_time: str
     end_time: str
     start_at: datetime  # naive UTC
     end_at: datetime  # naive UTC
     status: SlotStatus = SlotStatus.AVAILABLE
-    appointment_id: ObjectId | None = None
+    appointment_id: str | None = None
     held_until: datetime | None = None
-    availability_id: ObjectId | None = None  # working window that generated the slot
+    availability_id: str | None = None  # working window that generated the slot
     block_source: str | None = None  # "AVAILABILITY" | "MANUAL" while BLOCKED
-    blocked_by_availability_id: ObjectId | None = None
+    blocked_by_availability_id: str | None = None

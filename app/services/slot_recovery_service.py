@@ -2,15 +2,13 @@
 import logging
 from typing import Any
 
-from bson import ObjectId
-
 from app.core.config import Settings
 from app.database.collections import C
 from app.services.slot_rules import slot_block_reason
 from app.services.waitlist_service import WaitlistService
 from app.utils.time_utils import utcnow
 
-logger = logging.getLogger("smartcare.recovery")
+logger = logging.getLogger("nivara.recovery")
 
 
 class SlotRecoveryService:
@@ -19,11 +17,11 @@ class SlotRecoveryService:
         self.settings = settings
         self.waitlist = WaitlistService(db, settings)
 
-    async def on_slot_released(self, slot_id: ObjectId, *, exclude_patient_id: ObjectId | None = None) -> list[dict]:
+    async def on_slot_released(self, slot_id: Any, *, exclude_patient_id: Any = None) -> list[dict]:
         """Re-check the freed slot against ALL bookability rules (slot status, doctor, hospital and
         department intake, lead time) and only then look for waitlist matches. Never raises."""
         try:
-            slot = await self.db[C.APPOINTMENT_SLOTS].find_one({"_id": slot_id})
+            slot = await self.db[C.APPOINTMENT_SLOTS].find_one({"_id": str(slot_id)})
             if slot is None or slot["status"] != "AVAILABLE":
                 return []  # re-claimed already, or blocked by doctor time-off
             doctor = await self.db[C.DOCTORS].find_one({"_id": slot["doctor_id"]})

@@ -1,19 +1,18 @@
-from bson import ObjectId
 from pydantic import Field, model_validator
 
-from app.models.base import MongoModel
+from app.models.base import EntityModel
 from app.models.enums import DepartmentStatus, IntakeStatus
 from app.utils.text import normalize
 
 
-class Hospital(MongoModel):
+class Hospital(EntityModel):
     name: str
     name_normalized: str = ""
     address: str
     location: dict = Field(default_factory=dict)  # {city, state, latitude, longitude}
     contact: dict = Field(default_factory=dict)  # {phone, email, website}
     appointment_intake_status: IntakeStatus = IntakeStatus.OPEN
-    department_ids: list[ObjectId] = Field(default_factory=list)
+    department_ids: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _normalize(self) -> "Hospital":
@@ -23,8 +22,8 @@ class Hospital(MongoModel):
         return self
 
 
-class Department(MongoModel):
-    hospital_id: ObjectId
+class Department(EntityModel):
+    hospital_id: str
     name: str
     name_normalized: str = ""
     description: str | None = None

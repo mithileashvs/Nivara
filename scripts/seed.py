@@ -1,4 +1,4 @@
-"""Development seed data for SmartCare.
+"""Development seed data for Nivara.
 
 Populates a small, realistic scenario through the SAME public REST API the frontend would use
 (via an in-process ASGI client — no server needs to be running), so every record goes through the
@@ -11,11 +11,11 @@ Usage:
     python scripts/seed.py
 
 Safe to run more than once: every step checks whether its record already exists (by email / name /
-date+time) before creating it, so re-running does not create duplicates. It DOES require a reachable
-MongoDB (the URI in your environment / `.env`) — it does not touch `mongomock`.
+date+time) before creating it, so re-running does not create duplicates. Requires DATABASE_URL
+configured in your environment / `.env`.
 
 Never uses real personal data. All accounts use the same development password (see PASSWORD below)
-and @smartcare.local email addresses that cannot receive real mail.
+and @nivara.local / @smartcare.local email addresses that cannot receive real mail.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.security import hash_password
-from app.database.connection import MongoManager
+from app.database.connection import DatabaseManager
 from app.database.indexes import ensure_indexes
 from app.main import create_app
 from app.models.enums import UserRole
@@ -39,7 +39,8 @@ logging.basicConfig(level=logging.WARNING)  # keep seed output readable; suppres
 
 PREFIX = "/api/v1"
 PASSWORD = "DevPass123!"  # development only — never used in production
-ADMIN_EMAIL = "admin@smartcare.local"
+ADMIN_EMAIL = "admin@nivara.com"
+
 
 
 def line(msg: str) -> None:
@@ -92,9 +93,7 @@ class Seeder:
         return r.json()
 
     async def ensure_department(self, admin: dict, hospital_id: str, name: str) -> dict:
-        from bson import ObjectId
-
-        existing = await self.db["departments"].find_one({"hospital_id": ObjectId(hospital_id), "name": name})
+        existing = await self.db["departments"].find_one({"hospital_id": hospital_id, "name": name})
         if existing is not None:
             self.skipped.append(f"department '{name}' (already exists)")
             return {"id": str(existing["_id"]), "name": name}
@@ -144,10 +143,8 @@ class Seeder:
     # ---------------------------------------------------------------- availability / slots
 
     async def ensure_availability(self, doctor: dict, day: date, start: str = "09:00", end: str = "13:00") -> None:
-        from bson import ObjectId
-
         existing = await self.db["doctor_availability"].find_one({
-            "doctor_id": ObjectId(doctor["id"]), "date": day.isoformat(), "start_time": start, "status": "WORKING",
+            "doctor_id": doctor["id"], "date": day.isoformat(), "start_time": start, "status": "WORKING",
         })
         if existing is not None:
             self.skipped.append(f"availability for {doctor['name']} on {day} (already exists)")
@@ -170,10 +167,8 @@ class Seeder:
 
     async def ensure_appointment(self, patient: dict, doctor: dict, day: date, *, decision: str | None) -> None:
         """decision: None (leave REQUESTED), 'accept', or 'reject'."""
-        from bson import ObjectId
-
         already = await self.db["appointments"].count_documents({
-            "patient_id": ObjectId(patient["id"]), "doctor_id": ObjectId(doctor["id"]), "appointment_date": day.isoformat(),
+            "patient_id": patient["id"], "doctor_id": doctor["id"], "appointment_date": day.isoformat(),
         })
         if already:
             self.skipped.append(f"appointment {patient['name']} <-> {doctor['name']} on {day} (already exists)")
@@ -197,8 +192,19 @@ class Seeder:
 
 
 async def main() -> None:
-    settings = get_settings()
-    manager = MongoManager(settings)
+    import os
+    from app.core.config import Settings
+    try:
+        settings = get_settings()
+    except Exception:
+        settings = Settings(
+            database_url=os.environ.get("DATABASE_URL", "postgresql+asyncpg://postgres@127.0.0.1:5433/postgres"),
+            database_name="nivara",
+            jwt_secret="dev-seed-secret-key-that-is-at-least-32-chars-long",
+            environment="development",
+        )
+    settings.rate_limit_enabled = False
+    manager = DatabaseManager(settings)
     db = await manager.connect()
     await ensure_indexes(db)
     await DepartmentRoutingService(db).ensure_default_rules()
@@ -206,7 +212,7 @@ async def main() -> None:
     app = create_app(settings, db=db)  # reuse the real app/routes; skip its own DB connection
     transport = httpx.ASGITransport(app=app)
 
-    print(f"Seeding SmartCare development data into database '{settings.database_name}' ...")
+    print("Seeding Nivara development data into database ...")
     async with httpx.AsyncClient(transport=transport, base_url="http://seed") as client:
         s = Seeder(client, db)
 
@@ -222,19 +228,19 @@ async def main() -> None:
         d_h2_ortho = await s.ensure_department(admin, h2["id"], "Orthopedics")
 
         doctors = [
-            await s.ensure_doctor(admin, "Dr. Asha Rao", "doctor1@smartcare.local", "General Medicine", h1["id"], d_h1_general["id"], experience=10, consultation_fee=300),
-            await s.ensure_doctor(admin, "Dr. Ravi Kumar", "doctor2@smartcare.local", "Cardiology", h1["id"], d_h1_cardio["id"], experience=15, consultation_fee=800),
-            await s.ensure_doctor(admin, "Dr. Meena Iyer", "doctor3@smartcare.local", "Dermatology", h1["id"], d_h1_derma["id"], experience=6, consultation_fee=500),
-            await s.ensure_doctor(admin, "Dr. Suresh Babu", "doctor4@smartcare.local", "General Medicine", h2["id"], d_h2_general["id"], experience=4, consultation_fee=250),
-            await s.ensure_doctor(admin, "Dr. Priya Nathan", "doctor5@smartcare.local", "Orthopedics", h2["id"], d_h2_ortho["id"], experience=8, consultation_fee=600),
+            await s.ensure_doctor(admin, "Dr. Asha Rao", "doctor1@nivara.com", "General Medicine", h1["id"], d_h1_general["id"], experience=10, consultation_fee=300),
+            await s.ensure_doctor(admin, "Dr. Ravi Kumar", "doctor2@nivara.com", "Cardiology", h1["id"], d_h1_cardio["id"], experience=15, consultation_fee=800),
+            await s.ensure_doctor(admin, "Dr. Meena Iyer", "doctor3@nivara.com", "Dermatology", h1["id"], d_h1_derma["id"], experience=6, consultation_fee=500),
+            await s.ensure_doctor(admin, "Dr. Suresh Babu", "doctor4@nivara.com", "General Medicine", h2["id"], d_h2_general["id"], experience=4, consultation_fee=250),
+            await s.ensure_doctor(admin, "Dr. Priya Nathan", "doctor5@nivara.com", "Orthopedics", h2["id"], d_h2_ortho["id"], experience=8, consultation_fee=600),
         ]
 
         patients = [
-            await s.ensure_patient("Test Patient One", "patient1@smartcare.local", date_of_birth="1990-05-01", gender="FEMALE"),
-            await s.ensure_patient("Test Patient Two", "patient2@smartcare.local", date_of_birth="1985-11-20", gender="MALE"),
-            await s.ensure_patient("Test Patient Three", "patient3@smartcare.local"),
-            await s.ensure_patient("Test Patient Four", "patient4@smartcare.local"),
-            await s.ensure_patient("Test Patient Five", "patient5@smartcare.local"),
+            await s.ensure_patient("Test Patient One", "patient1@nivara.com", date_of_birth="1990-05-01", gender="FEMALE"),
+            await s.ensure_patient("Test Patient Two", "patient2@nivara.com", date_of_birth="1985-11-20", gender="MALE"),
+            await s.ensure_patient("Test Patient Three", "patient3@nivara.com"),
+            await s.ensure_patient("Test Patient Four", "patient4@nivara.com"),
+            await s.ensure_patient("Test Patient Five", "patient5@nivara.com"),
         ]
 
         today = date.today()

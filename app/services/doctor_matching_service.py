@@ -14,8 +14,6 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from bson import ObjectId
-
 from app.core.config import Settings
 from app.core.errors import BadRequestError
 from app.database.collections import C
@@ -34,9 +32,9 @@ SLOTS_PER_DOCTOR = 10
 @dataclass
 class Gathered:
     doctors: list[dict]
-    slots_by_doctor: dict[ObjectId, list[dict]]
-    hospitals: dict[ObjectId, dict]
-    departments: dict[ObjectId, dict]
+    slots_by_doctor: dict[str, list[dict]]
+    hospitals: dict[str, dict]
+    departments: dict[str, dict]
     date_from: str
     date_to: str
     now: datetime
@@ -163,7 +161,7 @@ class DoctorMatchingService:
         if c.department_id:
             add("department", 1.0, "Slots in the requested department", "Department match")
         slot_hospitals = {s["hospital_id"] for s in slots}
-        prefs = {ObjectId(h) for h in c.preferred_hospital_ids} | ({ObjectId(c.hospital_id)} if c.hospital_id else set())
+        prefs = {str(h) for h in c.preferred_hospital_ids} | ({str(c.hospital_id)} if c.hospital_id else set())
         if prefs:
             hit = bool(slot_hospitals & prefs)
             add("hospital_preference", 1.0 if hit else 0.0, "Available at a preferred hospital" if hit else "Not at a preferred hospital", "Preferred hospital")

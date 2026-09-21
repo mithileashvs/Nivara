@@ -2,7 +2,6 @@
 from datetime import timedelta
 from typing import Any
 
-from bson import ObjectId
 
 from app.core.config import Settings
 from app.core.errors import BadRequestError, ConflictError, NotFoundError
@@ -93,7 +92,7 @@ class AvailabilityService:
         return result
 
     async def list_for_doctor(
-        self, doctor_id: ObjectId, params: PageParams, date_from: str | None, date_to: str | None
+        self, doctor_id: str, params: PageParams, date_from: str | None, date_to: str | None
     ) -> tuple[list[dict], int]:
         query: dict[str, Any] = {"doctor_id": doctor_id}
         if date_from or date_to:
@@ -104,7 +103,7 @@ class AvailabilityService:
                 query["date"]["$lte"] = date_to
         return await paginate(self.coll, query, params, sort=[("date", 1), ("start_time", 1)])
 
-    async def delete(self, doctor_id: ObjectId, availability_id: str) -> dict[str, int]:
+    async def delete(self, doctor_id: str, availability_id: str) -> dict[str, int]:
         window = await self.coll.find_one({"_id": oid(availability_id), "doctor_id": doctor_id})
         if window is None:
             raise NotFoundError("Availability not found", code="availability_not_found")

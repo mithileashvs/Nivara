@@ -1,27 +1,26 @@
-from bson import ObjectId
 from pydantic import Field, model_validator
 
-from app.models.base import MongoModel
+from app.models.base import EntityModel
 from app.models.enums import WaitlistStatus
 from app.utils.text import normalize
 
 
-class Notification(MongoModel):
-    user_id: ObjectId
+class Notification(EntityModel):
+    user_id: str
     type: str
     title: str
     message: str
-    related_appointment_id: ObjectId | None = None
+    related_appointment_id: str | None = None
     is_read: bool = False
     data: dict = Field(default_factory=dict)
 
 
-class WaitlistEntry(MongoModel):
-    patient_id: ObjectId
-    patient_user_id: ObjectId
-    doctor_id: ObjectId | None = None
-    department_id: ObjectId | None = None
-    hospital_id: ObjectId | None = None
+class WaitlistEntry(EntityModel):
+    patient_id: str
+    patient_user_id: str
+    doctor_id: str | None = None
+    department_id: str | None = None
+    hospital_id: str | None = None
     specialty: str | None = None
     specialty_normalized: str | None = None
     date_from: str
@@ -29,12 +28,10 @@ class WaitlistEntry(MongoModel):
     time_from: str | None = None
     time_to: str | None = None
     consultation_type: str | None = None
-    # "Notify me if an EARLIER appointment opens": only slots starting before this
-    # existing appointment are eligible.
-    existing_appointment_id: ObjectId | None = None
+    existing_appointment_id: str | None = None
     status: WaitlistStatus = WaitlistStatus.ACTIVE
-    notified_slot_ids: list[ObjectId] = Field(default_factory=list)
-    fulfilled_appointment_id: ObjectId | None = None
+    notified_slot_ids: list[str] = Field(default_factory=list)
+    fulfilled_appointment_id: str | None = None
 
     @model_validator(mode="after")
     def _normalize(self) -> "WaitlistEntry":
@@ -42,12 +39,12 @@ class WaitlistEntry(MongoModel):
         return self
 
 
-class SymptomRoutingRule(MongoModel):
+class SymptomRoutingRule(EntityModel):
     department_name: str
     department_name_normalized: str = ""
     keywords: list[str]
     weight: float = 1.0
-    is_emergency: bool = False  # adds a "seek emergency care" notice — never a diagnosis
+    is_emergency: bool = False
     is_active: bool = True
 
     @model_validator(mode="after")

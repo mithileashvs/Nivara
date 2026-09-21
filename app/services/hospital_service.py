@@ -3,8 +3,7 @@ import re
 from datetime import date, timedelta
 from typing import Any
 
-from bson import ObjectId
-from pymongo.errors import DuplicateKeyError
+from app.database.session import DuplicateKeyError
 
 from app.core.config import Settings
 from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
@@ -18,16 +17,18 @@ from app.utils.text import normalize
 from app.utils.time_utils import date_to_str, today_local, utcnow
 
 
-def can_manage_hospital(user: dict, hospital_id: ObjectId) -> bool:
+def can_manage_hospital(user: dict, hospital_id: Any) -> bool:
     """Platform admins (managed_hospital_ids is None) manage everything; hospital administrators only
     the hospitals listed in their scope. Non-admins never manage hospitals."""
     if user["role"] != UserRole.ADMIN:
         return False
     scope = user.get("managed_hospital_ids")
-    return scope is None or hospital_id in scope
+    if scope is None:
+        return True
+    return str(hospital_id) in [str(h) for h in scope]
 
 
-def assert_can_manage_hospital(user: dict, hospital_id: ObjectId) -> None:
+def assert_can_manage_hospital(user: dict, hospital_id: Any) -> None:
     if not can_manage_hospital(user, hospital_id):
         raise ForbiddenError("You are not authorised to manage this hospital", code="hospital_scope_forbidden")
 
@@ -155,7 +156,7 @@ class HospitalService:
         )
         await self.db[C.INTAKE_EVENTS].insert_one(
             {
-                "_id": ObjectId(), "target_type": target_type, "target_id": target["_id"], "hospital_id": hospital_id,
+                "target_type": target_type, "target_id": target["_id"], "hospital_id": hospital_id,
                 "previous_status": previous.value, "new_status": status.value, "changed_by": user["_id"],
                 "reason": reason, "created_at": utcnow(),
             }
@@ -193,7 +194,7 @@ class HospitalService:
             )
         ]
         now = utcnow()
-        counts: dict[ObjectId, int] = {}
+        counts: dict[str, int] = {}
         if hospital_open and eligible:
             rows = await self.db[C.APPOINTMENT_SLOTS].aggregate(
                 [

@@ -2,8 +2,6 @@ import re
 from datetime import date, timedelta
 from typing import Any
 
-from bson import ObjectId
-
 from app.core.config import Settings
 from app.core.errors import BadRequestError, NotFoundError
 from app.database.collections import C
@@ -48,11 +46,11 @@ class DoctorService:
 
     async def hospital_filter(
         self, *, hospital_id: str | None, city: str | None, lat: float | None, lon: float | None, max_km: float | None
-    ) -> set[ObjectId] | None:
+    ) -> set[str] | None:
         """Hospital ids satisfying hard hospital-level filters, or None if unconstrained."""
-        allowed: set[ObjectId] | None = None
+        allowed: set[str] | None = None
 
-        def narrow(ids: set[ObjectId]) -> None:
+        def narrow(ids: set[str]) -> None:
             nonlocal allowed
             allowed = ids if allowed is None else allowed & ids
 
@@ -102,7 +100,7 @@ class DoctorService:
             query["hospital_ids"] = {"$in": list(hospitals)}
         return query
 
-    async def doctor_ids_with_bookable_slots(self, date_from: str, date_to: str) -> list[ObjectId]:
+    async def doctor_ids_with_bookable_slots(self, date_from: str, date_to: str) -> list[str]:
         now = utcnow()
         open_h, open_d = await self.intake.open_scope()
         if not open_h or not open_d:

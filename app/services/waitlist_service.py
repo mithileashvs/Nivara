@@ -15,8 +15,6 @@ import logging
 from datetime import date, datetime
 from typing import Any
 
-from bson import ObjectId
-
 from app.core.config import MatchingConfig, Settings
 from app.core.errors import BadRequestError, ConflictError, NotFoundError
 from app.database.collections import C
@@ -29,7 +27,7 @@ from app.utils.pagination import PageParams, paginate
 from app.utils.text import normalize
 from app.utils.time_utils import date_to_str, time_to_str, today_local, utcnow
 
-logger = logging.getLogger("smartcare.waitlist")
+logger = logging.getLogger("nivara.waitlist")
 
 
 def evaluate_entry(
@@ -135,30 +133,29 @@ class WaitlistService:
         await self.coll.insert_one(doc)
         return doc
 
-    async def list_mine(self, patient_id: ObjectId, params: PageParams, status: WaitlistStatus | None) -> tuple[list[dict], int]:
+    async def list_mine(self, patient_id: str, params: PageParams, status: WaitlistStatus | None) -> tuple[list[dict], int]:
         query: dict[str, Any] = {"patient_id": patient_id}
         if status:
             query["status"] = status.value
         return await paginate(self.coll, query, params, sort=[("created_at", -1)])
 
-    async def get_mine(self, patient_id: ObjectId, entry_id: str) -> dict:
+    async def get_mine(self, patient_id: str, entry_id: str) -> dict:
         doc = await self.coll.find_one({"_id": oid(entry_id), "patient_id": patient_id})
         if doc is None:
             raise NotFoundError("Waitlist entry not found", code="waitlist_not_found")
         return doc
 
-    async def cancel(self, patient_id: ObjectId, entry_id: str) -> dict:
+    async def cancel(self, patient_id: str, entry_id: str) -> dict:
         doc = await self.coll.find_one_and_update(
             {"_id": oid(entry_id), "patient_id": patient_id, "status": WaitlistStatus.ACTIVE},
             {"$set": {"status": WaitlistStatus.CANCELLED, "updated_at": utcnow()}},
-            return_document=True,
         )
         if doc is None:
             await self.get_mine(patient_id, entry_id)  # 404 if not theirs
             raise ConflictError("Only ACTIVE waitlist entries can be cancelled", code="waitlist_not_active")
         return doc
 
-    async def mark_fulfilled(self, patient_id: ObjectId, slot_id: ObjectId, appointment_id: ObjectId) -> int:
+    async def mark_fulfilled(self, patient_id: str, slot_id: str, appointment_id: str) -> int:
         """A patient who requests a slot they were notified about has had their entry satisfied."""
         res = await self.coll.update_many(
             {"patient_id": patient_id, "status": WaitlistStatus.ACTIVE, "notified_slot_ids": slot_id},
@@ -176,7 +173,7 @@ class WaitlistService:
 
     # ------------------------------------------------------------------ matching
 
-    async def find_eligible(self, slot: dict, doctor: dict, exclude_patient_id: ObjectId | None = None) -> list[dict[str, Any]]:
+    async def find_eligible(self, slot: dict, doctor: dict, exclude_patient_id: str | None = None) -> list[dict[str, Any]]:
         now = utcnow()
         conds: list[dict[str, Any]] = [
             {"status": WaitlistStatus.ACTIVE},
@@ -193,27 +190,27 @@ class WaitlistService:
         candidates = await self.coll.find({"$and": conds}).sort("created_at", 1).limit(500).to_list(length=500)
 
         existing_ids = [c["existing_appointment_id"] for c in candidates if c.get("existing_appointment_id")]
-        existing_start: dict[ObjectId, datetime] = {}
+        existing_start: dict[str, datetime] = {}
         if existing_ids:
             async for a in self.db[C.APPOINTMENTS].find(
                 {"_id": {"$in": existing_ids}, "is_active": True}, {"start_at": 1}
             ):
-                existing_start[a["_id"]] = a["start_at"]
+                existing_start[str(a["_id"])] = a["start_at"]
 
-        best: dict[ObjectId, dict[str, Any]] = {}
+        best: dict[str, dict[str, Any]] = {}
         for entry in candidates:
             result = evaluate_entry(
-                entry, slot, doctor, existing_start.get(entry.get("existing_appointment_id")), self.settings.matching_config, now
+                entry, slot, doctor, existing_start.get(str(entry.get("existing_appointment_id"))), self.settings.matching_config, now
             )
             if result is None:
                 continue
             row = {"entry": entry, **result}
-            current = best.get(entry["patient_id"])
+            current = best.get(str(entry["patient_id"]))
             if current is None or row["score"] > current["score"]:
-                best[entry["patient_id"]] = row
+                best[str(entry["patient_id"])] = row
         return sorted(best.values(), key=lambda r: (-r["score"], r["entry"]["created_at"]))
 
-    async def notify_for_slot(self, slot: dict, doctor: dict, exclude_patient_id: ObjectId | None = None) -> list[dict[str, Any]]:
+    async def notify_for_slot(self, slot: dict, doctor: dict, exclude_patient_id: Any = None) -> list[dict[str, Any]]:
         ranked = await self.find_eligible(slot, doctor, exclude_patient_id)
         notified: list[dict[str, Any]] = []
         for row in ranked[: self.settings.waitlist_notify_top_n]:

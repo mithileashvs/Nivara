@@ -1,7 +1,5 @@
 from typing import Any
 
-from bson import ObjectId
-
 from app.core.errors import NotFoundError
 from app.database.collections import C
 from app.models.enums import AppointmentStatus
@@ -36,8 +34,10 @@ class PatientService:
         if payload.gender is not None:
             p_set["gender"] = payload.gender.value
         if payload.basic_information is not None:
+            bi = dict(patient.get("basic_information") or {})
             for k, v in payload.basic_information.model_dump(exclude_unset=True).items():
-                p_set[f"basic_information.{k}"] = v
+                bi[k] = v
+            p_set["basic_information"] = bi
         if p_set or user_set:
             p_set["updated_at"] = now
             patient = await self.db[C.PATIENTS].find_one_and_update(
@@ -45,12 +45,12 @@ class PatientService:
             )
         return merge_patient(patient, user)
 
-    async def get_for_doctor(self, doctor_id: ObjectId, patient_id: str) -> dict:
+    async def get_for_doctor(self, doctor_id: Any, patient_id: str) -> dict:
         """A doctor may only see patients they have (or had) an appointment with."""
         pid = oid(patient_id)
         related = await self.db[C.APPOINTMENTS].find_one(
             {
-                "doctor_id": doctor_id,
+                "doctor_id": str(doctor_id),
                 "patient_id": pid,
                 "status": {"$in": [AppointmentStatus.REQUESTED, AppointmentStatus.CONFIRMED, AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW]},
             },

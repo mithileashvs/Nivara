@@ -18,13 +18,12 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
-from bson import ObjectId
-from pymongo import ReturnDocument
-from pymongo.errors import DuplicateKeyError
+from uuid import uuid4
 
 from app.core.config import Settings
 from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.database.collections import C
+from app.database.session import DuplicateKeyError
 from app.models.appointments import Appointment, AppointmentHistory
 from app.models.enums import (
     ACTIVE_APPOINTMENT_STATUSES, AppointmentStatus as S, NotificationType, SlotStatus, SystemActor, UserRole,
@@ -39,7 +38,7 @@ from app.utils.object_id import oid
 from app.utils.pagination import PageParams, paginate
 from app.utils.time_utils import date_to_str, utcnow
 
-logger = logging.getLogger("smartcare.appointments")
+logger = logging.getLogger("nivara.appointments")
 
 MAX_ACTIVE_LOOKAHEAD = 500
 
@@ -48,9 +47,9 @@ MAX_ACTIVE_LOOKAHEAD = 500
 class Actor:
     """The authenticated caller acting on an appointment (patient or doctor)."""
 
-    user_id: ObjectId
+    user_id: str
     role: str
-    profile_id: ObjectId  # patient_id or doctor_id
+    profile_id: str  # patient_id or doctor_id
     name: str
 
     @property
@@ -82,7 +81,7 @@ class AppointmentService:
     # ------------------------------------------------------------------ helpers
 
     async def _history(
-        self, appt_id: ObjectId, prev: str | None, new: str, actor: Actor | None, reason: str | None
+        self, appt_id: str, prev: str | None, new: str, actor: Actor | None, reason: str | None
     ) -> None:
         try:
             await self.db[C.APPOINTMENT_HISTORY].insert_one(
@@ -100,7 +99,7 @@ class AppointmentService:
 
     async def _transition(
         self,
-        appt_id: ObjectId,
+        appt_id: str,
         from_statuses: list[str],
         to: S,
         reason: str | None,
@@ -109,7 +108,6 @@ class AppointmentService:
         return await self.coll.find_one_and_update(
             {"_id": appt_id, "status": {"$in": from_statuses}, **(extra_filter or {})},
             {"$set": {"status": to.value, "is_active": to in ACTIVE_APPOINTMENT_STATUSES, "status_reason": reason, "updated_at": utcnow()}},
-            return_document=ReturnDocument.AFTER,
         )
 
     async def get_for_actor(self, actor: Actor, appointment_id: str) -> dict:
@@ -162,7 +160,7 @@ class AppointmentService:
 
     # ------------------------------------------------------------------ validation shared by request/reschedule
 
-    async def _prepare_slot(self, slot_id: str, consultation_type: str, now, expected_doctor_id: ObjectId | None = None):
+    async def _prepare_slot(self, slot_id: str, consultation_type: str, now, expected_doctor_id: str | None = None):
         slot = await self.slots.get(oid(slot_id))
         if expected_doctor_id is not None and slot["doctor_id"] != expected_doctor_id:
             raise BadRequestError("Rescheduling must stay with the same doctor; request a new appointment instead", code="different_doctor")
@@ -181,7 +179,7 @@ class AppointmentService:
             raise BadRequestError("This slot is too far in the future to book", code="date_too_far")
         return slot, doctor
 
-    async def _check_patient_capacity(self, patient_id: ObjectId, slot: dict, exclude_id: ObjectId | None = None, count_pending: bool = True) -> None:
+    async def _check_patient_capacity(self, patient_id: str, slot: dict, exclude_id: str | None = None, count_pending: bool = True) -> None:
         exclude = {"_id": {"$ne": exclude_id}} if exclude_id else {}
         if count_pending:
             pending = await self.coll.count_documents({"patient_id": patient_id, "status": S.REQUESTED.value, **exclude})
@@ -203,7 +201,7 @@ class AppointmentService:
         slot, doctor = await self._prepare_slot(payload.slot_id, ctype, now)
         await self._check_patient_capacity(actor.profile_id, slot)
 
-        appt_id = ObjectId()
+        appt_id = str(uuid4())
         hold_until = min(now + timedelta(minutes=self.settings.request_hold_minutes), slot["start_at"])
         # >>> The concurrency-critical step: one atomic conditional update. Losers get 409. <<<
         await self.slots.claim(slot["_id"], appt_id, target=SlotStatus.HELD, hold_until=hold_until, now=now)
@@ -351,7 +349,6 @@ class AppointmentService:
                     "start_at": new_slot["start_at"], "end_at": new_slot["end_at"], "status": new_status.value, "is_active": True,
                     "status_reason": reason, "reminder_sent": False, "updated_at": now,
                 }},
-                return_document=ReturnDocument.AFTER,
             )
         except DuplicateKeyError:
             updated = None

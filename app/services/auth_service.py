@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from pymongo.errors import DuplicateKeyError
+from app.database.session import DuplicateKeyError
 
 from app.core.config import Settings
 from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
@@ -12,7 +12,7 @@ from app.models.users import Doctor, Patient, User
 from app.schemas.auth import RegisterRequest
 from app.utils.object_id import oid
 
-logger = logging.getLogger("smartcare.auth")
+logger = logging.getLogger("nivara.auth")
 
 INVALID_CREDENTIALS = "Invalid email or password"
 

@@ -1,12 +1,11 @@
-from bson import ObjectId
 from pydantic import Field, model_validator
 
-from app.models.base import MongoModel
+from app.models.base import EntityModel
 from app.models.enums import Gender, IntakeStatus, ProfileStatus, UserRole
 from app.utils.text import normalize
 
 
-class User(MongoModel):
+class User(EntityModel):
     name: str
     email: str
     password_hash: str
@@ -14,25 +13,24 @@ class User(MongoModel):
     role: UserRole
     is_active: bool = True
     # ADMIN only. None => platform-wide admin. A list => "hospital administrator"
-    # limited to those hospitals (this is how hospital management is modelled
-    # without adding a fourth authentication role).
-    managed_hospital_ids: list[ObjectId] | None = None
+    # limited to those hospitals.
+    managed_hospital_ids: list[str] | None = None
 
 
-class Patient(MongoModel):
-    user_id: ObjectId
+class Patient(EntityModel):
+    user_id: str
     date_of_birth: str | None = None  # "YYYY-MM-DD"
     gender: Gender = Gender.UNDISCLOSED
     basic_information: dict = Field(default_factory=dict)
 
 
-class Doctor(MongoModel):
-    user_id: ObjectId
+class Doctor(EntityModel):
+    user_id: str
     name: str
     specialty: str
     specialty_normalized: str = ""
-    department_ids: list[ObjectId] = Field(default_factory=list)
-    hospital_ids: list[ObjectId] = Field(default_factory=list)
+    department_ids: list[str] = Field(default_factory=list)
+    hospital_ids: list[str] = Field(default_factory=list)
     experience: int = 0  # years
     consultation_fee: float = 0.0
     consultation_types: list[str] = Field(default_factory=list)

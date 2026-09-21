@@ -1,6 +1,6 @@
 from typing import Any
 
-from pymongo.errors import DuplicateKeyError
+from app.database.session import DuplicateKeyError
 
 from app.core.config import Settings
 from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError

@@ -1,5 +1,4 @@
 """Full appointment lifecycle, conflict handling, and reschedule behaviour."""
-from bson import ObjectId
 
 
 async def test_full_lifecycle_request_to_completed(world):
@@ -141,6 +140,6 @@ async def test_other_patient_cannot_see_appointment(world):
 
 
 async def test_appointment_not_found_uses_valid_object_id_shape(world):
-    fake_id = str(ObjectId())
+    fake_id = "6ab0ce6703a2b6aff2b977df"
     r = await world.api("GET", f"/appointments/{fake_id}", world.p1)
     assert r.status_code == 404, r.text

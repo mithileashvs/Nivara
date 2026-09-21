@@ -1,21 +1,21 @@
-# SmartCare Backend
+# Nivara Backend
 
-A FastAPI + MongoDB backend for healthcare appointment management: patients *request* appointments,
+A FastAPI + Supabase PostgreSQL backend for healthcare appointment management: patients *request* appointments,
 doctors accept or reject them, and admins manage platform resources — never individual appointments.
 
-This README documents the **backend only**. There is no frontend in this repository.
+This README documents the **backend only**. The frontend React client is in `frontend/`.
 
 ---
 
 ## 1. Overview
 
-SmartCare lets patients find doctors, view real bookable slots, and request appointments. Doctors
+Nivara lets patients find doctors, view real bookable slots, and request appointments. Doctors
 manage their own working hours and decide on each request. Hospitals, departments and doctors can
 each independently open/close new-appointment intake without touching appointments already in
 progress. The backend also includes smart (but strictly non-medical) features: department routing
 from symptoms, doctor matching, and appointment-slot optimisation.
 
-**Medical safety, stated plainly:** SmartCare does not diagnose medical conditions, does not
+**Medical safety, stated plainly:** Nivara does not diagnose medical conditions, does not
 prescribe medicines, does not recommend medication or dosage, and does not generate treatment plans.
 The "smart" features are appointment-discovery tools only.
 
@@ -24,46 +24,45 @@ The "smart" features are appointment-discovery tools only.
 ```
 app/
   core/        settings, security (JWT/bcrypt), error handling, middleware, rate limiting
-  database/    Mongo connection, collection names, index definitions
-  models/      MongoDB document models (pydantic, used only for building/validating documents)
+  database/    SQLAlchemy Core tables, PostgreSQL DDL schema, async DatabaseManager, TableRepository session abstraction
+  models/      data models (pydantic, used for building/validating records and enums)
   schemas/     API request/response models (pydantic)
   services/    business logic — one service per domain, routes stay thin
   routes/      FastAPI routers — thin: parse request -> call service -> serialise response
   data/        static seed data for department-routing rules
 scripts/       seed.py — development seed data
-tests/         pytest suite (in-memory MongoDB by default)
+tests/         pytest suite running against PostgreSQL
 ```
 
-Routes never talk to MongoDB directly; they call a service, which owns its collection(s). Every
-mutation that must be atomic (claiming a slot, transitioning an appointment) is a single conditional
-`find_one_and_update` — the database itself is the source of truth for who "won" a race, not
+Routes never talk to the database directly; they call a service, which owns its domain operations. Every
+mutation that must be atomic (claiming a slot, transitioning an appointment) uses atomic, conditional SQL updates
+with `RETURNING *` — the database itself is the source of truth for who "won" a race, not
 application-level locks. See the appointment lifecycle in `app/services/appointment_service.py` for
 the concurrency model in detail.
 
 ## 3. Technology stack
 
 - **FastAPI** (async) on **Uvicorn**
-- **MongoDB** via **Motor** (async driver) / **PyMongo**
+- **PostgreSQL / Supabase** via **SQLAlchemy 2.0 (Core / async)** + **asyncpg** (with fallback support for **aiosqlite**)
 - **Pydantic v2** for both settings and request/response validation
 - **PyJWT** for stateless bearer-token auth, **bcrypt** for password hashing
-- **Pytest** + **pytest-asyncio** + **httpx** for tests, running against **mongomock-motor**
-  (in-memory) by default, or a real MongoDB if you set `TEST_MONGODB_URI`
+- **Pytest** + **pytest-asyncio** + **httpx** for comprehensive automated testing
 
 ## 4. Requirements
 
 - Python 3.12+
-- MongoDB 6+ (local install, Docker, or Atlas) — or Docker Compose, which provides both
+- PostgreSQL 16+ (local install, Supabase, or Docker)
 
 ## 5. Installation
 
 ```bash
 git clone <this-repo>
-cd smartcare-backend
+cd Nivara
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt   # installs runtime + test dependencies
 cp .env.example .env
-# edit .env: set JWT_SECRET at minimum (see below)
+# edit .env: set DATABASE_URL and JWT_SECRET at minimum (see below)
 ```
 
 Generate a JWT secret:
@@ -79,30 +78,29 @@ All variables are documented in `.env.example`. The important ones:
 | Variable | Purpose |
 |---|---|
 | `ENVIRONMENT` | `development` / `test` / `production`. Production enforces a strong `JWT_SECRET` and disallows `CORS_ORIGINS=*`. |
-| `MONGODB_URI`, `DATABASE_NAME` | Where to connect. |
+| `DATABASE_URL`, `DATABASE_NAME` | PostgreSQL / Supabase connection URL. |
 | `JWT_SECRET`, `JWT_ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES` | Auth token signing. |
 | `CORS_ORIGINS` | Comma-separated allowed browser origins. |
 | `APP_TIMEZONE` | IANA timezone used to interpret slot dates/times (clinic-local wall clock). |
 | `REQUEST_HOLD_MINUTES`, `MAX_PENDING_REQUESTS_PER_PATIENT`, `MAX_SCHEDULING_HORIZON_DAYS`, `MIN_BOOKING_LEAD_MINUTES` | Scheduling limits. |
 | `BACKGROUND_JOBS_ENABLED`, `BACKGROUND_JOB_INTERVAL_SECONDS`, `REMINDER_HOURS_BEFORE` | Periodic housekeeping (expire stale holds, send reminders). |
-| `WAITLIST_*` | Smart waitlist limits (second-50% feature, already implemented). |
+| `WAITLIST_*` | Smart waitlist limits. |
 | `RATE_LIMIT_*` | In-process rate limiting for auth endpoints. |
 
 Never commit a real `.env` — `.gitignore` already excludes it.
 
-## 7. MongoDB setup
+## 7. Database setup
 
-Any reachable MongoDB 6+ works. For local development without Docker:
+Any reachable PostgreSQL 16+ or Supabase instance works. For local development with Docker:
 
 ```bash
-# macOS (Homebrew)
-brew install mongodb-community && brew services start mongodb-community
-# or run the official Docker image directly
-docker run -d -p 27017:27017 --name smartcare-mongo mongo:7
+docker compose up -d postgres
 ```
 
-Then set `MONGODB_URI=mongodb://localhost:27017` in `.env`. The app creates all required indexes
-automatically on startup (`app/database/indexes.py`).
+Or connect directly to your Supabase project using the Transaction/Session pooling connection string:
+`DATABASE_URL=postgresql+asyncpg://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres`
+
+The application creates all required tables and indexes automatically on startup via `app/database/tables.py` and `app/database/indexes.py`. Raw DDL is also provided in `app/database/schema.sql`.
 
 ## 8. Running FastAPI
 
@@ -115,31 +113,37 @@ at `/redoc`, the raw OpenAPI schema at `/openapi.json`.
 
 ## 9. Running the seed script
 
+To seed your Supabase PostgreSQL database with complete development data:
+
 ```bash
-python scripts/seed.py
+python scripts/seed_supabase.py
+```
+
+To verify the seed (tests authentication, profile status, and doctor search):
+
+```bash
+python scripts/verify_seed.py
 ```
 
 Creates one admin, five doctors (across two hospitals / five departments), five patients, working
 hours and slots for the next three days, and a handful of sample appointments in different lifecycle
-states (confirmed, pending, rejected). It talks to the **same MongoDB your app is configured to use**
-(via `.env`) through the real API, so the app does not need to be separately running first. It is
-idempotent — safe to run again; existing records are detected by email/name and skipped.
+states (confirmed, pending, rejected). It talks to the **same PostgreSQL database your app is configured to use**
+(via `.env`) through the real API. It is idempotent — safe to run again; existing records are detected by email/name and skipped.
 
-Credentials (all fictional, `@smartcare.local`, never real personal data):
+Credentials (all fictional, `@nivara.com`, never real personal data):
 
 | Role | Email | Password |
 |---|---|---|
-| Admin | `admin@smartcare.local` | `DevPass123!` |
-| Doctor | `doctor1@smartcare.local` … `doctor5@smartcare.local` | `DevPass123!` |
-| Patient | `patient1@smartcare.local` … `patient5@smartcare.local` | `DevPass123!` |
+| Admin | `admin@nivara.com` | `DevPass123!` |
+| Doctor | `doctor1@nivara.com` … `doctor5@nivara.com` | `DevPass123!` |
+| Patient | `patient1@nivara.com` … `patient5@nivara.com` | `DevPass123!` |
 
 **Never reuse this password outside development.**
 
 ## 10. Running tests
 
 ```bash
-pytest                                    # in-memory MongoDB (mongomock-motor), no server needed
-TEST_MONGODB_URI=mongodb://localhost:27017 pytest   # same suite against a real MongoDB
+pytest
 ```
 
 Coverage includes: registration/login/JWT/deactivation, RBAC boundaries per role, doctor search and
@@ -147,8 +151,7 @@ availability, hospital/department CRUD and intake control, the full appointment 
 accept/reject → complete/no-show, cancel, reschedule), slot-conflict handling (409s), hospital /
 department / doctor intake closure (new requests blocked, existing appointments untouched),
 notification creation for every lifecycle event, admin platform management, the two statistics
-endpoints, health checks, and a concurrency test that fires simultaneous requests at the same slot
-with `asyncio.gather` to prove exactly one wins.
+endpoints, health checks, and deterministic concurrency tests (`tests/test_concurrency.py`).
 
 ## 11. Swagger documentation
 

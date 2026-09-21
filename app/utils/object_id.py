@@ -1,28 +1,30 @@
-from typing import Annotated
+import re
+from typing import Annotated, Any
+from uuid import UUID
 
-from bson import ObjectId
-from bson.errors import InvalidId
 from fastapi import Path
 from pydantic import StringConstraints
 
 from app.core.errors import BadRequestError
 
-OID_PATTERN = r"^[0-9a-fA-F]{24}$"
+# Supports UUID strings (36 chars with hyphens or 32 hex) as well as 24 hex chars
+ID_PATTERN = r"^[0-9a-fA-F-]{24,36}$"
 
-# Body / query fields: 24-char hex string (validated by Pydantic -> 422 on failure).
-ObjectIdStr = Annotated[str, StringConstraints(pattern=OID_PATTERN)]
+# Body / query fields: validated by Pydantic -> 422 on failure.
+ObjectIdStr = Annotated[str, StringConstraints(pattern=ID_PATTERN)]
 # Path parameters: same validation, appears nicely in OpenAPI.
-ObjectIdPath = Annotated[str, Path(pattern=OID_PATTERN, description="MongoDB ObjectId (24 hex chars)")]
+ObjectIdPath = Annotated[str, Path(pattern=ID_PATTERN, description="Unique Identifier (UUID or hex)")]
 
 
-def oid(value: str | ObjectId) -> ObjectId:
-    if isinstance(value, ObjectId):
-        return value
-    try:
-        return ObjectId(str(value))
-    except (InvalidId, TypeError):
-        raise BadRequestError("Invalid identifier", code="invalid_id") from None
+def oid(value: Any) -> str:
+    """Validate and return normalized string ID."""
+    if not value:
+        raise BadRequestError("Invalid identifier", code="invalid_id")
+    s = str(value).strip()
+    if not re.match(ID_PATTERN, s):
+        raise BadRequestError("Invalid identifier", code="invalid_id")
+    return s
 
 
-def oids(values: list[str | ObjectId] | None) -> list[ObjectId]:
+def oids(values: list[Any] | None) -> list[str]:
     return [oid(v) for v in (values or [])]

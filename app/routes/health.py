@@ -11,8 +11,8 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.get("/health/ready", summary="Readiness check (MongoDB ping)",
-            description="200 if MongoDB responds, 503 otherwise. **Auth:** none.")
+@router.get("/health/ready", summary="Readiness check (Database ping)",
+            description="200 if database responds, 503 otherwise. **Auth:** none.")
 async def ready(request: Request) -> Any:
     try:
         await request.app.state.db.command("ping")
