@@ -28,6 +28,7 @@ class AppointmentSlot(EntityModel):
     status: SlotStatus = SlotStatus.AVAILABLE
     appointment_id: str | None = None
     held_until: datetime | None = None
+    waitlist_offer_id: str | None = None
     availability_id: str | None = None  # working window that generated the slot
     block_source: str | None = None  # "AVAILABILITY" | "MANUAL" while BLOCKED
     blocked_by_availability_id: str | None = None

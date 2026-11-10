@@ -67,6 +67,7 @@ class SlotService:
                     "status": target,
                     "appointment_id": appointment_id,
                     "held_until": hold_until,
+                    "waitlist_offer_id": None,
                     "block_source": None,
                     "blocked_by_availability_id": None,
                     "updated_at": now,
@@ -82,7 +83,7 @@ class SlotService:
     async def promote_to_booked(self, slot_id: str, appointment_id: str, now: datetime) -> bool:
         doc = await self.slots.find_one_and_update(
             {"_id": slot_id, "appointment_id": appointment_id, "status": SlotStatus.HELD, "held_until": {"$gte": now}},
-            {"$set": {"status": SlotStatus.BOOKED, "held_until": None, "updated_at": now}},
+            {"$set": {"status": SlotStatus.BOOKED, "held_until": None, "waitlist_offer_id": None, "updated_at": now}},
         )
         return doc is not None
 
@@ -124,6 +125,7 @@ class SlotService:
             "status": SlotStatus.BLOCKED if blocking else SlotStatus.AVAILABLE,
             "appointment_id": None,
             "held_until": None,
+            "waitlist_offer_id": None,
             "block_source": "AVAILABILITY" if blocking else None,
             "blocked_by_availability_id": blocking["_id"] if blocking else None,
             "updated_at": utcnow(),

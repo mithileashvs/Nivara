@@ -25,7 +25,10 @@ export function Pagination({ page, totalPages, total, pageSize, onChange, classN
           <ChevronLeft size={15} aria-hidden="true" />
           Previous
         </Button>
-        <span className="px-1 text-sm tabular-nums text-ink-muted" aria-current="page">
+        <span
+          className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium tabular-nums text-forest-700"
+          aria-current="page"
+        >
           {page} / {totalPages}
         </span>
         <Button

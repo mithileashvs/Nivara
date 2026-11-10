@@ -1,24 +1,32 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarCheck, CalendarClock, CheckCircle2, Users } from 'lucide-react'
-import { PageHeader, NotificationBell } from '../../components/Topbar'
+import { ArrowRight, BellRing, CalendarCheck, CalendarClock, CheckCircle2, RotateCw, Users } from 'lucide-react'
+import { PageHeader } from '../../components/Topbar'
 import { StatCard } from '../../components/StatCard'
 import { AppointmentCard } from '../../components/AppointmentCard'
 import { IntakeToggle } from '../../components/IntakeToggle'
-import { Avatar } from '../../components/ui/Avatar'
+import { Alert } from '../../components/ui/Alert'
 import { Badge } from '../../components/ui/StatusBadge'
+import { Button } from '../../components/ui/Button'
+import { ConfirmationModal } from '../../components/ui/Modal'
+import { Textarea } from '../../components/ui/Field'
 import { Card, CardBody } from '../../components/ui/Card'
 import { AsyncBoundary, EmptyState, LoadingSkeleton, ErrorState } from '../../components/ui/States'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useAsync } from '../../hooks/useAsync'
 import { useDirectory } from '../../hooks/useDirectory'
-import { useUnreadCount } from '../../hooks/useUnreadCount'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { getMyStatistics, setDoctorIntake } from '../../api/doctors'
-import { listAppointments } from '../../api/appointments'
+import { getDoctorWaitlistStats } from '../../api/waitlist'
+import {
+  approveRescheduleRequest,
+  listAppointments,
+  listDoctorRescheduleRequests,
+  rejectRescheduleRequest,
+} from '../../api/appointments'
 import { APPOINTMENT_STATUS, MAX_PAGE_SIZE, PROFILE_STATUS } from '../../utils/constants'
-import { greeting, todayString } from '../../utils/format'
+import { formatDate, greeting, todayString } from '../../utils/format'
 import { errorMessage } from '../../utils/errors'
 
 /**
@@ -28,11 +36,11 @@ import { errorMessage } from '../../utils/errors'
 export default function DoctorDashboard() {
   useDocumentTitle('Dashboard')
   const { user, doctorProfile, refreshDoctorProfile } = useAuth()
-  const { unread } = useUnreadCount()
   const { hospitalName, departmentName } = useDirectory()
   const toast = useToast()
 
   const stats = useAsync(() => getMyStatistics(), [])
+  const waitlistStats = useAsync(() => getDoctorWaitlistStats(), [])
   const today = todayString()
 
   const pending = useAsync(
@@ -44,6 +52,43 @@ export default function DoctorDashboard() {
       }),
     [],
   )
+
+  const pendingReschedules = useAsync(
+    () =>
+      listDoctorRescheduleRequests({
+        status: 'REQUESTED',
+        page: 1,
+        page_size: 5,
+      }),
+    [],
+  )
+
+  const [rescheduleDecision, setRescheduleDecision] = useState(null)
+  const [decisionNote, setDecisionNote] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const handleRescheduleSubmit = async () => {
+    if (!rescheduleDecision) return
+    const { request, action } = rescheduleDecision
+    setBusy(true)
+    try {
+      if (action === 'approve') {
+        await approveRescheduleRequest(request.id, decisionNote.trim() || undefined)
+        toast.success(`Reschedule approved. Appointment moved to ${formatDate(request.requested_appointment_date)} at ${request.requested_start_time}.`)
+      } else {
+        await rejectRescheduleRequest(request.id, decisionNote.trim() || undefined)
+        toast.success('Reschedule request declined. Original appointment remains confirmed.')
+      }
+      setRescheduleDecision(null)
+      setDecisionNote('')
+      pendingReschedules.reload()
+      stats.reload()
+    } catch (err) {
+      toast.error(errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const todays = useAsync(
     () => listAppointments({ date_from: today, date_to: today, page: 1, page_size: MAX_PAGE_SIZE }),
@@ -76,27 +121,19 @@ export default function DoctorDashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <PageHeader
-          eyebrow={`${greeting()},`}
-          title={firstName}
-          description="Here's how your day looks."
-        />
-        <div className="flex items-center gap-3">
-          <NotificationBell unread={unread} to="/doctor/notifications" />
-          <Link to="/doctor/profile" aria-label="Profile" className="hidden rounded-full focus-ring lg:block">
-            <Avatar name={user?.name} />
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow={greeting()}
+        title={firstName}
+        description="Review appointment requests, today's confirmed consultations, and schedule updates."
+      />
 
       {/* A pending or suspended profile cannot publish availability or take requests. */}
       {doctorProfile && doctorProfile.profile_status !== PROFILE_STATUS.ACTIVE && (
-        <p className="rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-forest-700" role="status">
+        <Alert tone="warn">
           {doctorProfile.profile_status === PROFILE_STATUS.PENDING
             ? 'Your profile is awaiting verification. An administrator needs to activate it and assign your hospital and department before you can publish availability or receive requests.'
             : 'Your profile is suspended. Contact your administrator to restore it.'}
-        </p>
+        </Alert>
       )}
 
       {doctorProfile?.profile_status === PROFILE_STATUS.ACTIVE && (
@@ -125,7 +162,7 @@ export default function DoctorDashboard() {
         ) : stats.error ? (
           <ErrorState error={stats.error} onRetry={stats.reload} />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <StatCard
               icon={CalendarClock}
               value={stats.data.todays_appointments}
@@ -138,6 +175,20 @@ export default function DoctorDashboard() {
               label="Pending requests"
               tone={stats.data.pending_requests > 0 ? 'warn' : 'default'}
               to="/doctor/appointments?status=REQUESTED"
+            />
+            <StatCard
+              icon={RotateCw}
+              value={stats.data.pending_reschedule_requests ?? 0}
+              label="Reschedule requests"
+              tone={(stats.data.pending_reschedule_requests ?? 0) > 0 ? 'warn' : 'default'}
+              to="/doctor/appointments?status=RESCHEDULE_REQUESTS"
+            />
+            <StatCard
+              icon={BellRing}
+              value={waitlistStats.data?.active_waitlist_patients ?? 0}
+              label="Waitlist patients"
+              tone={(waitlistStats.data?.active_waitlist_patients ?? 0) > 0 ? 'warn' : 'default'}
+              to="/doctor/appointments?status=WAITLIST_QUEUE"
             />
             <StatCard
               icon={CheckCircle2}
@@ -191,6 +242,98 @@ export default function DoctorDashboard() {
         </AsyncBoundary>
       </section>
 
+      {/* Reschedule requests section */}
+      <section aria-labelledby="reschedule-heading">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <h2 id="reschedule-heading" className="text-lg font-semibold text-forest-700">
+              Reschedule requests
+            </h2>
+            {(pendingReschedules.data?.total ?? 0) > 0 && (
+              <Badge tone="warn">{pendingReschedules.data.total}</Badge>
+            )}
+          </div>
+          <Link
+            to="/doctor/appointments?status=RESCHEDULE_REQUESTS"
+            className="rounded text-sm font-medium text-forest transition-colors hover:text-forest-400 focus-ring"
+          >
+            View all
+          </Link>
+        </div>
+
+        <AsyncBoundary
+          loading={pendingReschedules.loading}
+          error={pendingReschedules.error}
+          onRetry={pendingReschedules.reload}
+          isEmpty={(pendingReschedules.data?.items ?? []).length === 0}
+          skeleton={<LoadingSkeleton rows={2} />}
+          empty={
+            <EmptyState
+              icon={CheckCircle2}
+              title="No reschedule requests"
+              description="No patients are currently requesting to reschedule."
+            />
+          }
+        >
+          <div className="space-y-3">
+            {(pendingReschedules.data?.items ?? []).map((req) => (
+              <Card key={req.id}>
+                <CardBody className="p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-forest-900">{req.patient_name}</span>
+                        <Badge tone="warn">Reschedule Requested</Badge>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-forest-800">
+                        <span className="rounded-lg bg-surface-sunken px-2.5 py-1 text-xs text-ink-muted line-through">
+                          Current: {formatDate(req.old_appointment_date)} at {req.old_start_time}
+                        </span>
+                        <ArrowRight className="h-4 w-4 text-forest-400" aria-hidden="true" />
+                        <span className="rounded-lg border border-ok/30 bg-ok-soft px-2.5 py-1 text-xs font-semibold text-forest-800">
+                          Requested: {formatDate(req.requested_appointment_date)} at {req.requested_start_time}
+                        </span>
+                      </div>
+
+                      {req.reason && (
+                        <p className="text-xs text-ink-muted">
+                          <span className="font-medium text-forest-800">Patient&apos;s Reason:</span> &ldquo;{req.reason}&rdquo;
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => setRescheduleDecision({ request: req, action: 'approve' })}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-danger/30 text-danger hover:border-danger/50 hover:bg-danger-soft"
+                        onClick={() => setRescheduleDecision({ request: req, action: 'reject' })}
+                      >
+                        Decline
+                      </Button>
+                      <Link
+                        to={`/doctor/appointments/${req.appointment_id}`}
+                        className="inline-flex h-9 items-center rounded-lg border border-line bg-surface px-3 text-xs font-medium text-forest-700 transition-colors hover:border-forest-200 hover:bg-forest-50 focus-ring"
+                      >
+                        Details
+                      </Link>
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
+            ))}
+          </div>
+        </AsyncBoundary>
+      </section>
+
       <section aria-labelledby="today-heading">
         <h2 id="today-heading" className="mb-4 text-lg font-semibold text-forest-700">
           Confirmed for today
@@ -216,6 +359,49 @@ export default function DoctorDashboard() {
           </div>
         </AsyncBoundary>
       </section>
+
+      {/* Reschedule confirmation modal */}
+      <ConfirmationModal
+        open={Boolean(rescheduleDecision)}
+        onClose={() => {
+          if (!busy) {
+            setRescheduleDecision(null)
+            setDecisionNote('')
+          }
+        }}
+        title={
+          rescheduleDecision?.action === 'approve'
+            ? 'Approve appointment reschedule?'
+            : 'Decline appointment reschedule?'
+        }
+        confirmLabel={
+          rescheduleDecision?.action === 'approve'
+            ? 'Approve Reschedule'
+            : 'Decline Reschedule'
+        }
+        tone={rescheduleDecision?.action === 'approve' ? 'primary' : 'danger'}
+        onConfirm={handleRescheduleSubmit}
+        loading={busy}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-ink-muted">
+            {rescheduleDecision?.action === 'approve'
+              ? `You are confirming the appointment change for ${rescheduleDecision?.request?.patient_name} to ${formatDate(rescheduleDecision?.request?.requested_appointment_date)} at ${rescheduleDecision?.request?.requested_start_time}. The previous slot will be released atomically.`
+              : `You are declining this reschedule request. The original appointment on ${formatDate(rescheduleDecision?.request?.old_appointment_date)} at ${rescheduleDecision?.request?.old_start_time} will remain active.`}
+          </p>
+          <Textarea
+            label={rescheduleDecision?.action === 'approve' ? 'Optional note for patient' : 'Reason / note for declining'}
+            placeholder={
+              rescheduleDecision?.action === 'approve'
+                ? 'e.g. Approved. Please arrive 10 minutes early.'
+                : 'e.g. I am unavailable at this requested time. Please request an alternative slot.'
+            }
+            value={decisionNote}
+            onChange={(e) => setDecisionNote(e.target.value)}
+            rows={3}
+          />
+        </div>
+      </ConfirmationModal>
     </div>
   )
 }

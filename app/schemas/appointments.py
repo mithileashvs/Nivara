@@ -1,8 +1,9 @@
 from datetime import date
+from typing import Any
 
 from pydantic import ConfigDict, Field
 
-from app.models.enums import AppointmentStatus, ConsultationType
+from app.models.enums import AppointmentStatus, ConsultationType, ReschedulingStatus
 from app.schemas.common import RequestModel, ResponseModel, UTCDateTime
 from app.utils.object_id import ObjectIdStr
 
@@ -23,9 +24,49 @@ class AppointmentReject(RequestModel):
     reason: str | None = Field(default=None, max_length=300)
 
 
+class AppointmentCancel(RequestModel):
+    reason: str = Field(..., min_length=1, max_length=500, description="Mandatory reason for cancellation")
+
+
 class AppointmentReschedule(RequestModel):
     new_slot_id: ObjectIdStr
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class AppointmentRescheduleRequest(RequestModel):
+    new_slot_id: ObjectIdStr
+    reason: str = Field(..., min_length=1, max_length=500, description="Mandatory reason for rescheduling request")
+
+
+class ReschedulingDecision(RequestModel):
     reason: str | None = Field(default=None, max_length=300)
+
+
+class ReschedulingRequestOut(ResponseModel):
+    id: str
+    appointment_id: str
+    patient_id: str
+    patient_name: str | None = None
+    doctor_id: str
+    doctor_name: str | None = None
+    hospital_id: str
+    hospital_name: str | None = None
+    department_id: str
+    department_name: str | None = None
+    old_slot_id: str
+    requested_slot_id: str
+    old_appointment_date: str | None = None
+    old_start_time: str | None = None
+    old_end_time: str | None = None
+    requested_appointment_date: str | None = None
+    requested_start_time: str | None = None
+    requested_end_time: str | None = None
+    reason: str
+    status: ReschedulingStatus | str
+    doctor_response: str | None = None
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
+    resolved_at: UTCDateTime | None = None
 
 
 class AppointmentOut(ResponseModel):
@@ -100,4 +141,9 @@ class AppointmentHistoryOut(ResponseModel):
     changed_by: str | None
     changed_by_role: str
     reason: str | None = None
+    previous_date: str | None = None
+    previous_time: str | None = None
+    new_date: str | None = None
+    new_time: str | None = None
+    metadata: dict[str, Any] | None = None
     created_at: UTCDateTime

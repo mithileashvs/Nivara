@@ -1,16 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { CalendarPlus, FileText, Search, Sparkles, CalendarCheck2 } from 'lucide-react'
-import { PageHeader, NotificationBell } from '../../components/Topbar'
+import { PageHeader } from '../../components/Topbar'
 import { SearchBar } from '../../components/SearchBar'
 import { QuickAction } from '../../components/QuickAction'
 import { AppointmentCard } from '../../components/AppointmentCard'
 import { AsyncBoundary, EmptyState, LoadingSkeleton } from '../../components/ui/States'
-import { Avatar } from '../../components/ui/Avatar'
+import { Badge } from '../../components/ui/StatusBadge'
 import { useAuth } from '../../context/AuthContext'
 import { useAsync } from '../../hooks/useAsync'
 import { useDirectory } from '../../hooks/useDirectory'
-import { useUnreadCount } from '../../hooks/useUnreadCount'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { listAppointments } from '../../api/appointments'
 import { APPOINTMENT_STATUS, PAGE_SIZE } from '../../utils/constants'
@@ -25,7 +24,6 @@ export default function PatientDashboard() {
   useDocumentTitle('Dashboard')
   const { user } = useAuth()
   const navigate = useNavigate()
-  const { unread } = useUnreadCount()
   const { hospitalName, departmentName } = useDirectory()
   const [query, setQuery] = useState('')
 
@@ -49,24 +47,11 @@ export default function PatientDashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <PageHeader
-          eyebrow={`${greeting()},`}
-          title={
-            <span className="flex items-center gap-2">
-              {firstName}
-              <span aria-hidden="true">👋</span>
-            </span>
-          }
-          description="Take charge of your health today."
-        />
-        <div className="hidden items-center gap-3 lg:flex">
-          <NotificationBell unread={unread} />
-          <Link to="/profile" aria-label="Profile" className="rounded-full focus-ring">
-            <Avatar name={user?.name} />
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow={`${greeting()}`}
+        title={firstName}
+        description="Take charge of your health — search verified specialists, manage appointments, or review your records."
+      />
 
       <SearchBar
         value={query}
@@ -105,9 +90,14 @@ export default function PatientDashboard() {
 
       <section aria-labelledby="upcoming-heading">
         <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 id="upcoming-heading" className="text-lg font-semibold text-forest-700">
-            Upcoming appointments
-          </h2>
+          <div className="flex items-center gap-2.5">
+            <h2 id="upcoming-heading" className="text-lg font-semibold text-forest-700">
+              Upcoming appointments
+            </h2>
+            {!upcoming.loading && rows.length > 0 && (
+              <Badge tone="neutral">{rows.length}</Badge>
+            )}
+          </div>
           <Link
             to="/appointments"
             className="rounded text-sm font-medium text-forest transition-colors hover:text-forest-400 focus-ring"

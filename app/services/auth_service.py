@@ -7,9 +7,18 @@ from app.core.config import Settings
 from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
 from app.core.security import burn_password_check, create_access_token, hash_password, verify_password
 from app.database.collections import C
-from app.models.enums import ConsultationType, Gender, UserRole
+from app.models.enums import (
+    AuditAction,
+    AuditActorRole,
+    AuditEntityType,
+    AuditSeverity,
+    ConsultationType,
+    Gender,
+    UserRole,
+)
 from app.models.users import Doctor, Patient, User
 from app.schemas.auth import RegisterRequest
+from app.services.audit_service import AuditService
 from app.utils.object_id import oid
 
 logger = logging.getLogger("nivara.auth")
@@ -59,17 +68,75 @@ class AuthService:
         except Exception:
             await self.db[C.USERS].delete_one({"_id": user["_id"]})  # don't leave a profile-less account
             raise
+        await AuditService(self.db, self.settings).log_event(
+            action=AuditAction.AUTH_REGISTER,
+            entity_type=AuditEntityType.USER,
+            entity_id=user["_id"],
+            actor_id=user["_id"],
+            actor_role=str(user["role"]),
+            severity=AuditSeverity.INFO,
+            description=f"Registered new {user['role']} account",
+            metadata={"role": str(user["role"]), "email": user["email"]},
+        )
         return user
 
     async def authenticate(self, email: str, password: str) -> tuple[dict, str, int]:
-        user = await self.db[C.USERS].find_one({"email": email.lower()})
+        norm_email = email.lower().strip()
+        audit = AuditService(self.db, self.settings)
+        user = await self.db[C.USERS].find_one({"email": norm_email})
         if user is None:
             burn_password_check(password, self.settings.bcrypt_rounds)  # equalise timing
+            await audit.log_event(
+                action=AuditAction.AUTH_LOGIN_FAILED,
+                entity_type=AuditEntityType.AUTH,
+                entity_id=None,
+                actor_id=None,
+                actor_role=AuditActorRole.ANONYMOUS,
+                severity=AuditSeverity.WARNING,
+                description="Failed login attempt (invalid credentials)",
+                metadata={"attempted_email": norm_email, "reason": "invalid_credentials"},
+                check_security_thresholds=True,
+            )
             raise UnauthorizedError(INVALID_CREDENTIALS, code="invalid_credentials")
         if not verify_password(password, user["password_hash"]) or not user.get("is_active", False):
+            fail_reason = "inactive_account" if not user.get("is_active", False) else "invalid_credentials"
+            await audit.log_event(
+                action=AuditAction.AUTH_LOGIN_FAILED,
+                entity_type=AuditEntityType.AUTH,
+                entity_id=user["_id"],
+                actor_id=user["_id"],
+                actor_role=str(user["role"]),
+                severity=AuditSeverity.WARNING,
+                description=f"Failed login attempt for {user['email']} ({fail_reason})",
+                metadata={"attempted_email": norm_email, "reason": fail_reason},
+                check_security_thresholds=True,
+            )
             raise UnauthorizedError(INVALID_CREDENTIALS, code="invalid_credentials")
         token, expires_in = create_access_token(user_id=str(user["_id"]), role=user["role"], settings=self.settings)
+        await audit.log_event(
+            action=AuditAction.AUTH_LOGIN_SUCCESS,
+            entity_type=AuditEntityType.AUTH,
+            entity_id=user["_id"],
+            actor_id=user["_id"],
+            actor_role=str(user["role"]),
+            severity=AuditSeverity.INFO,
+            description=f"User {user['email']} signed in",
+            metadata={"role": str(user["role"]), "email": user["email"]},
+        )
         return user, token, expires_in
+
+    async def logout(self, user: dict) -> dict[str, str]:
+        await AuditService(self.db, self.settings).log_event(
+            action=AuditAction.AUTH_LOGOUT,
+            entity_type=AuditEntityType.AUTH,
+            entity_id=user["_id"],
+            actor_id=user["_id"],
+            actor_role=str(user["role"]),
+            severity=AuditSeverity.INFO,
+            description=f"User {user['email']} signed out",
+            metadata={"role": str(user["role"]), "email": user["email"]},
+        )
+        return {"message": "Signed out successfully"}
 
     async def get_active_user(self, user_id: str) -> dict:
         user = await self.db[C.USERS].find_one({"_id": oid(user_id), "is_active": True})

@@ -8,9 +8,18 @@ from app.database.session import DuplicateKeyError
 from app.core.config import Settings
 from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.database.collections import C
-from app.models.enums import DepartmentStatus, IntakeStatus, ProfileStatus, SlotStatus, UserRole
+from app.models.enums import (
+    AuditAction,
+    AuditEntityType,
+    DepartmentStatus,
+    IntakeStatus,
+    ProfileStatus,
+    SlotStatus,
+    UserRole,
+)
 from app.models.facilities import Department, Hospital
 from app.schemas.facilities import DepartmentCreate, DepartmentUpdate, HospitalCreate, HospitalUpdate
+from app.services.audit_service import AuditService
 from app.utils.object_id import oid
 from app.utils.pagination import PageParams, paginate
 from app.utils.text import normalize
@@ -37,6 +46,7 @@ class HospitalService:
     def __init__(self, db: Any, settings: Settings) -> None:
         self.db = db
         self.settings = settings
+        self.audit = AuditService(db, settings)
 
     # ------------------------------------------------------------------ hospitals
 
@@ -50,6 +60,16 @@ class HospitalService:
             contact=payload.contact.model_dump(mode="json") if payload.contact else {},
         ).to_mongo()
         await self.db[C.HOSPITALS].insert_one(doc)
+        await self.audit.log_event(
+            action=AuditAction.HOSPITAL_CREATED,
+            entity_type=AuditEntityType.HOSPITAL,
+            entity_id=doc["_id"],
+            actor_id=user["_id"],
+            actor_role=str(user["role"]),
+            hospital_id=doc["_id"],
+            description=f"Created hospital {doc['name']}",
+            metadata={"hospital_name": doc["name"], "city": (doc.get("location") or {}).get("city")},
+        )
         return doc
 
     async def get_hospital(self, hospital_id: str) -> dict:
@@ -91,7 +111,18 @@ class HospitalService:
         if not changes:
             return hospital
         changes["updated_at"] = utcnow()
-        return await self.db[C.HOSPITALS].find_one_and_update({"_id": hospital["_id"]}, {"$set": changes}, return_document=True)
+        updated = await self.db[C.HOSPITALS].find_one_and_update({"_id": hospital["_id"]}, {"$set": changes}, return_document=True)
+        await self.audit.log_event(
+            action=AuditAction.HOSPITAL_UPDATED,
+            entity_type=AuditEntityType.HOSPITAL,
+            entity_id=hospital["_id"],
+            actor_id=user["_id"],
+            actor_role=str(user["role"]),
+            hospital_id=hospital["_id"],
+            description=f"Updated hospital {updated['name'] if updated else hospital['name']}",
+            metadata={"changed_fields": [k for k in changes.keys() if k not in ("updated_at", "name_normalized")]},
+        )
+        return updated
 
     # ------------------------------------------------------------------ departments
 
@@ -110,6 +141,16 @@ class HospitalService:
         except DuplicateKeyError:
             raise ConflictError("A department with this name already exists in the hospital", code="department_exists") from None
         await self.db[C.HOSPITALS].update_one({"_id": hospital["_id"]}, {"$addToSet": {"department_ids": doc["_id"]}})
+        await self.audit.log_event(
+            action=AuditAction.DEPARTMENT_CREATED,
+            entity_type=AuditEntityType.DEPARTMENT,
+            entity_id=doc["_id"],
+            actor_id=user["_id"],
+            actor_role=str(user["role"]),
+            hospital_id=hospital["_id"],
+            description=f"Created department {doc['name']} at {hospital['name']}",
+            metadata={"department_name": doc["name"], "hospital_name": hospital["name"]},
+        )
         return doc
 
     async def list_departments(
@@ -132,9 +173,20 @@ class HospitalService:
             return dept
         fields["updated_at"] = utcnow()
         try:
-            return await self.db[C.DEPARTMENTS].find_one_and_update({"_id": dept["_id"]}, {"$set": fields}, return_document=True)
+            updated = await self.db[C.DEPARTMENTS].find_one_and_update({"_id": dept["_id"]}, {"$set": fields}, return_document=True)
         except DuplicateKeyError:
             raise ConflictError("A department with this name already exists in the hospital", code="department_exists") from None
+        await self.audit.log_event(
+            action=AuditAction.DEPARTMENT_UPDATED,
+            entity_type=AuditEntityType.DEPARTMENT,
+            entity_id=dept["_id"],
+            actor_id=user["_id"],
+            actor_role=str(user["role"]),
+            hospital_id=dept["hospital_id"],
+            description=f"Updated department {updated['name'] if updated else dept['name']}",
+            metadata={"changed_fields": [k for k in fields.keys() if k not in ("updated_at", "name_normalized")]},
+        )
+        return updated
 
     # ------------------------------------------------------------------ intake control
 
@@ -164,6 +216,25 @@ class HospitalService:
         unaffected = await self.db[C.APPOINTMENTS].count_documents({**appt_filter, "is_active": True})
         label = "hospital" if target_type == "HOSPITAL" else "department"
         verb = "closed" if status == IntakeStatus.CLOSED else "opened"
+        await self.audit.log_event(
+            action=(
+                AuditAction.HOSPITAL_INTAKE_UPDATED
+                if target_type == "HOSPITAL"
+                else AuditAction.DEPARTMENT_INTAKE_UPDATED
+            ),
+            entity_type=AuditEntityType.HOSPITAL if target_type == "HOSPITAL" else AuditEntityType.DEPARTMENT,
+            entity_id=target["_id"],
+            actor_id=user["_id"],
+            actor_role=str(user["role"]),
+            hospital_id=hospital_id,
+            description=f"Set {label} {target['name']} appointment intake to {status.value}",
+            metadata={
+                "previous_status": previous.value,
+                "new_status": status.value,
+                "reason": reason,
+                "active_appointments_unaffected": unaffected,
+            },
+        )
         return {
             "target_type": target_type,
             "target_id": target["_id"],

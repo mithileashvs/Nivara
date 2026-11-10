@@ -18,6 +18,7 @@ const TABS = [
   { value: '', label: 'All' },
   { value: APPOINTMENT_STATUS.REQUESTED, label: 'Requested' },
   { value: APPOINTMENT_STATUS.CONFIRMED, label: 'Confirmed' },
+  { value: APPOINTMENT_STATUS.RESCHEDULE_REQUESTED, label: 'Rescheduling pending' },
   { value: APPOINTMENT_STATUS.COMPLETED, label: 'Completed' },
   { value: APPOINTMENT_STATUS.CANCELLED, label: 'Cancelled' },
   { value: APPOINTMENT_STATUS.REJECTED, label: 'Declined' },

@@ -81,6 +81,7 @@ class SlotPublicOut(ResponseModel):
 class SlotDoctorOut(SlotPublicOut):
     appointment_id: str | None = None
     held_until: UTCDateTime | None = None
+    waitlist_offer_id: str | None = None
     block_source: str | None = None
 
 

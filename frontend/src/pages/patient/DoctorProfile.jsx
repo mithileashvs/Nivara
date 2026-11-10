@@ -4,6 +4,7 @@ import { ArrowLeft, BadgeCheck, Bell, Building2, MapPin, Stethoscope } from 'luc
 import { Calendar } from '../../components/Calendar'
 import { SlotSelector } from '../../components/SlotSelector'
 import { RatingStars } from '../../components/RatingStars'
+import { Alert } from '../../components/ui/Alert'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/StatusBadge'
 import { Button } from '../../components/ui/Button'
@@ -234,10 +235,10 @@ export default function DoctorProfile() {
             />
             <CardBody className="space-y-5">
               {intakeClosed && (
-                <p className="rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-forest-700">
+                <Alert tone="warn">
                   This doctor has paused new appointment requests. Appointments already booked with
                   them are unaffected.
-                </p>
+                </Alert>
               )}
 
               <SlotSelector
@@ -248,6 +249,21 @@ export default function DoctorProfile() {
                 error={slots.error}
                 onRetry={slots.reload}
               />
+
+              {daySlots.filter((s) => s.bookable).length === 0 && !slots.loading && (
+                <div className="rounded-xl border border-line bg-forest-50/50 p-4 text-center">
+                  <p className="text-sm font-semibold text-forest-800">No open slots on this date</p>
+                  <p className="mt-1 text-xs text-ink-muted">
+                    Join the waitlist to receive an exclusive reservation as soon as a slot is freed or cancelled.
+                  </p>
+                  <Link to={`/waitlist?doctor_id=${d.id}&tab=active`}>
+                    <Button size="sm" className="mt-3">
+                      <Bell size={14} className="mr-1.5" />
+                      Join waitlist for Dr. {d.name}
+                    </Button>
+                  </Link>
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-3 border-t border-line pt-5">
                 <Button

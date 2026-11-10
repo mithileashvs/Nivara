@@ -1,7 +1,9 @@
+from datetime import datetime
+
 from pydantic import Field, model_validator
 
 from app.models.base import EntityModel
-from app.models.enums import WaitlistStatus
+from app.models.enums import WaitlistOfferStatus, WaitlistStatus
 from app.utils.text import normalize
 
 
@@ -10,9 +12,18 @@ class Notification(EntityModel):
     type: str
     title: str
     message: str
+    category: str = "APPOINTMENT"
+    action_url: str | None = None
     related_appointment_id: str | None = None
     is_read: bool = False
+    read_at: datetime | None = None
     data: dict = Field(default_factory=dict)
+
+
+class NotificationPreference(EntityModel):
+    user_id: str
+    category: str
+    enabled: bool = True
 
 
 class WaitlistEntry(EntityModel):
@@ -37,6 +48,18 @@ class WaitlistEntry(EntityModel):
     def _normalize(self) -> "WaitlistEntry":
         self.specialty_normalized = normalize(self.specialty) if self.specialty else None
         return self
+
+
+class WaitlistOffer(EntityModel):
+    waitlist_entry_id: str
+    patient_id: str
+    doctor_id: str
+    slot_id: str | None = None
+    status: WaitlistOfferStatus = WaitlistOfferStatus.PENDING
+    expires_at: datetime
+    responded_at: datetime | None = None
+    reason: str | None = None
+    appointment_id: str | None = None
 
 
 class SymptomRoutingRule(EntityModel):

@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Building2, LayoutGrid, PlayCircle, Stethoscope, Users } from 'lucide-react'
+import { BarChart3, BellRing, Building2, LayoutGrid, PlayCircle, ScrollText, ShieldAlert, Stethoscope, Users } from 'lucide-react'
 import { PageHeader } from '../../components/Topbar'
 import { StatCard } from '../../components/StatCard'
+import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
 import { ErrorState, LoadingSkeleton } from '../../components/ui/States'
@@ -11,6 +12,7 @@ import { useAsync } from '../../hooks/useAsync'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../context/ToastContext'
 import { getStatistics, listDoctorProfiles, runMaintenance } from '../../api/admin'
+import { getAdminWaitlistStats } from '../../api/waitlist'
 import { APPOINTMENT_STATUS_LABEL, PROFILE_STATUS } from '../../utils/constants'
 import { errorMessage } from '../../utils/errors'
 
@@ -31,6 +33,7 @@ export default function AdminDashboard() {
   useDocumentTitle('Admin dashboard')
   const toast = useToast()
   const stats = useAsync(() => getStatistics(), [])
+  const waitlistStats = useAsync(() => getAdminWaitlistStats(), [])
   const pendingDoctors = useAsync(
     () => listDoctorProfiles({ profile_status: PROFILE_STATUS.PENDING, page: 1, page_size: 1 }),
     [],
@@ -69,21 +72,50 @@ export default function AdminDashboard() {
         title="Platform overview"
         description="Counted live from the database."
         actions={
-          <Button variant="outline" onClick={maintenance}>
-            <PlayCircle size={16} aria-hidden="true" />
-            Run housekeeping
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/admin/analytics"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-forest px-4 text-sm font-medium text-canvas transition-colors hover:bg-forest-700 focus-ring"
+            >
+              <BarChart3 size={16} aria-hidden="true" />
+              Operational analytics
+            </Link>
+            <Link
+              to="/admin/security"
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-medium text-forest-700 transition-colors hover:border-forest-200 hover:bg-forest-50 focus-ring"
+            >
+              <ShieldAlert size={16} aria-hidden="true" />
+              Security
+            </Link>
+            <Link
+              to="/admin/audit-logs"
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-medium text-forest-700 transition-colors hover:border-forest-200 hover:bg-forest-50 focus-ring"
+            >
+              <ScrollText size={16} aria-hidden="true" />
+              Audit logs
+            </Link>
+            <Button variant="outline" onClick={maintenance}>
+              <PlayCircle size={16} aria-hidden="true" />
+              Run housekeeping
+            </Button>
+          </div>
         }
       />
 
       {pendingCount > 0 && (
-        <p className="rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-forest-700">
-          {pendingCount} doctor {pendingCount === 1 ? 'profile is' : 'profiles are'} waiting for
-          verification.{' '}
-          <Link to="/admin/doctors?profile_status=PENDING" className="rounded font-semibold underline focus-ring">
-            Review them
-          </Link>
-        </p>
+        <Alert
+          tone="warn"
+          action={
+            <Link
+              to="/admin/doctors?profile_status=PENDING"
+              className="inline-flex h-9 items-center rounded-lg border border-warn/30 bg-surface px-3 text-xs font-semibold text-forest-700 transition-colors hover:bg-forest-50 focus-ring"
+            >
+              Review queue
+            </Link>
+          }
+        >
+          {pendingCount} doctor {pendingCount === 1 ? 'profile is' : 'profiles are'} awaiting verification.
+        </Alert>
       )}
 
       {stats.loading ? (
@@ -92,11 +124,17 @@ export default function AdminDashboard() {
         <ErrorState error={stats.error} onRetry={stats.reload} />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <StatCard icon={Users} value={stats.data.total_patients} label="Patients" to="/admin/users?role=PATIENT" />
             <StatCard icon={Stethoscope} value={stats.data.total_doctors} label="Doctors" to="/admin/doctors" />
             <StatCard icon={Building2} value={stats.data.total_hospitals} label="Hospitals" to="/admin/hospitals" />
             <StatCard icon={LayoutGrid} value={stats.data.total_departments} label="Departments" to="/admin/departments" />
+            <StatCard
+              icon={BellRing}
+              value={waitlistStats.data?.total_active_entries ?? 0}
+              label="Waitlist queues"
+              to="/admin/appointments?tab=waitlist"
+            />
             <StatCard icon={Users} value={stats.data.total_users} label="User accounts" to="/admin/users" />
           </div>
 
@@ -116,7 +154,7 @@ export default function AdminDashboard() {
             <CardBody>
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 8, left: -18 }}>
+                  <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 20, left: -18 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E4E7DF" vertical={false} />
                     <XAxis
                       dataKey="label"
@@ -124,11 +162,19 @@ export default function AdminDashboard() {
                       axisLine={{ stroke: '#E4E7DF' }}
                       tickLine={false}
                       interval={0}
+                      angle={-15}
+                      textAnchor="end"
+                      height={48}
                     />
                     <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#5C6B61' }} axisLine={false} tickLine={false} />
                     <Tooltip
                       cursor={{ fill: '#EEF3F0' }}
-                      contentStyle={{ borderRadius: 12, border: '1px solid #E4E7DF', fontSize: 12 }}
+                      contentStyle={{
+                        borderRadius: 12,
+                        border: '1px solid #E4E7DF',
+                        fontSize: 12,
+                        boxShadow: '0 8px 24px -16px rgba(23,60,43,0.3)',
+                      }}
                     />
                     <Bar dataKey="count" name="Appointments" radius={[6, 6, 0, 0]} maxBarSize={56}>
                       {chart.map((e) => (

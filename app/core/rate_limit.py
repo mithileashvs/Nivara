@@ -9,6 +9,7 @@ from collections import defaultdict, deque
 
 from fastapi import Request
 
+from app.core.audit_context import extract_client_ip
 from app.core.errors import TooManyRequestsError
 
 
@@ -34,9 +35,9 @@ class RateLimiter:
 
 
 def client_ip(request: Request) -> str:
-    # NOTE: behind a proxy, configure uvicorn `--proxy-headers` / forwarded-allow-ips
-    # so `request.client` reflects the real client rather than trusting raw headers.
-    return request.client.host if request.client else "unknown"
+    state = getattr(getattr(request, "app", None), "state", None)
+    settings = getattr(state, "settings", None)
+    return extract_client_ip(request, settings) or "unknown"
 
 
 async def auth_rate_limit(request: Request) -> None:

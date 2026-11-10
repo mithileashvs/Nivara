@@ -81,9 +81,71 @@ def _body(request: Request, code: str, message: str, details: Any = None) -> dic
     return payload
 
 
+def _resolve_hospital_id_from_path(path: str) -> str | None:
+    """Best-effort extract UUID after `/hospitals/{id}` for scoped security telemetry."""
+    parts = [p for p in path.split("/") if p]
+    for idx, seg in enumerate(parts):
+        if seg == "hospitals" and idx + 1 < len(parts):
+            candidate = parts[idx + 1]
+            if len(candidate) in (32, 36):
+                return candidate
+    return None
+
+
+async def _audit_security_error(request: Request, exc: AppError) -> None:
+    from app.core.audit_context import get_audit_actor, is_inside_audit
+
+    if is_inside_audit():
+        return
+    if exc.status_code not in (401, 403) or exc.code == "invalid_credentials":
+        return
+
+    path = request.url.path or ""
+    if exc.status_code == 401:
+        sensitive_prefix = any(
+            path.startswith(prefix)
+            for prefix in ("/api/v1/admin", "/api/v1/analytics", "/api/v1/medical-records")
+        )
+        if exc.code != "invalid_token" and not sensitive_prefix:
+            return
+
+    db = getattr(getattr(request, "app", None), "state", None)
+    db = getattr(db, "db", None)
+    settings = getattr(getattr(getattr(request, "app", None), "state", None), "settings", None)
+    if db is None or settings is None:
+        return
+
+    try:
+        from app.models.enums import AuditAction, AuditActorRole, AuditEntityType, AuditSeverity
+        from app.services.audit_service import AuditService
+
+        actor = get_audit_actor() or {}
+        action = (
+            AuditAction.AUTH_FORBIDDEN_ACCESS
+            if exc.status_code == 403
+            else AuditAction.AUTH_UNAUTHORIZED_ACCESS
+        )
+        hospital_id = _resolve_hospital_id_from_path(path)
+        await AuditService(db, settings).log_event(
+            action=action,
+            entity_type=AuditEntityType.AUTH,
+            entity_id=actor.get("user_id"),
+            actor_id=actor.get("user_id"),
+            actor_role=actor.get("role") or AuditActorRole.ANONYMOUS.value,
+            hospital_id=hospital_id,
+            severity=AuditSeverity.WARNING,
+            description=f"{request.method} {path} denied ({exc.status_code}: {exc.code})",
+            metadata={"method": request.method, "path": path, "error_code": exc.code, "status_code": exc.status_code},
+            check_security_thresholds=True,
+        )
+    except Exception:  # noqa: BLE001
+        logger.debug("Security audit hook skipped for %s", path)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError) -> JSONResponse:
+        await _audit_security_error(request, exc)
         return JSONResponse(
             status_code=exc.status_code,
             content=_body(request, exc.code, exc.message, exc.details),

@@ -1,4 +1,5 @@
 import { PageHeader } from '../../components/Topbar'
+import { Alert } from '../../components/ui/Alert'
 import { Card, CardBody } from '../../components/ui/Card'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 
@@ -52,14 +53,9 @@ export default function Help() {
         </ul>
       </Card>
 
-      <Card className="border-danger/30 bg-danger-soft">
-        <CardBody>
-          <h2 className="text-sm font-semibold text-forest-700">In an emergency</h2>
-          <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
-            Do not use Nivara. Contact your local emergency services immediately.
-          </p>
-        </CardBody>
-      </Card>
+      <Alert tone="danger" title="In an emergency">
+        Do not use Nivara. Contact your local emergency services immediately.
+      </Alert>
 
       <Card>
         <CardBody>

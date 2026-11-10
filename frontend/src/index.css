@@ -14,7 +14,7 @@
   }
 
   body {
-    @apply bg-canvas text-ink font-sans antialiased;
+    @apply bg-canvas text-ink font-sans antialiased selection:bg-forest-100 selection:text-forest-800;
     margin: 0;
     overflow-x: hidden;
   }
@@ -49,6 +49,10 @@
     @apply rounded-2xl border border-line bg-surface shadow-card;
   }
 
+  .card-interactive {
+    @apply card transition-all duration-150 hover:border-forest-200 hover:shadow-card-hover;
+  }
+
   .skeleton {
     @apply relative overflow-hidden rounded-lg bg-forest-50;
   }
@@ -69,6 +73,22 @@
   .scroll-x {
     @apply overflow-x-auto;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.sage.200') transparent;
+  }
+
+  .scroll-x::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+
+  .scroll-x::-webkit-scrollbar-thumb {
+    background-color: theme('colors.sage.200');
+    border-radius: 9999px;
+  }
+
+  .scroll-x::-webkit-scrollbar-track {
+    background: transparent;
   }
 }
 

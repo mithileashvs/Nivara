@@ -62,7 +62,7 @@ async def test_cannot_cancel_after_started(world):
     await world.add_window(world.d1)
     appt = await world.book(world.p1, world.d1, "09:00", confirm=True)
     await world.make_started(appt["id"])
-    r = await world.api("POST", f"/appointments/{appt['id']}/cancel", world.p1, json={})
+    r = await world.api("POST", f"/appointments/{appt['id']}/cancel", world.p1, json={"reason": "Unable to attend"})
     assert r.status_code == 409, r.text
     assert r.json()["error"]["code"] == "appointment_started"
 
@@ -109,16 +109,26 @@ async def test_reschedule_by_patient_returns_to_requested(world):
     await world.add_window(world.d1)
     appt = await world.book(world.p1, world.d1, "09:00", confirm=True)
     new_slot = await world.slot_at(world.d1, "09:30")
-    r = await world.api("POST", f"/appointments/{appt['id']}/reschedule", world.p1, json={"new_slot_id": new_slot["id"]})
+    r = await world.api(
+        "POST",
+        f"/appointments/{appt['id']}/reschedule",
+        world.p1,
+        json={"new_slot_id": new_slot["id"], "reason": "Schedule conflict"},
+    )
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "REQUESTED"
+    assert r.json()["status"] == "RESCHEDULE_REQUESTED"
 
 
 async def test_reschedule_by_doctor_stays_confirmed(world):
     await world.add_window(world.d1)
     appt = await world.book(world.p1, world.d1, "09:00", confirm=True)
     new_slot = await world.slot_at(world.d1, "10:00")
-    r = await world.api("POST", f"/appointments/{appt['id']}/reschedule", world.d1, json={"new_slot_id": new_slot["id"]})
+    r = await world.api(
+        "POST",
+        f"/appointments/{appt['id']}/reschedule",
+        world.d1,
+        json={"new_slot_id": new_slot["id"], "reason": "Clinic round shift"},
+    )
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "CONFIRMED"
 

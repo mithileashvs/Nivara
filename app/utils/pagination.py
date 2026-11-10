@@ -17,6 +17,10 @@ class PageParams:
     def skip(self) -> int:
         return (self.page - 1) * self.page_size
 
+    @property
+    def offset(self) -> int:
+        return self.skip
+
 
 def page_params(
     page: int = Query(1, ge=1, le=100_000, description="1-based page number"),

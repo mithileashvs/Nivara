@@ -7,7 +7,8 @@ from app.core.dependencies import DB, DoctorCtx, ParticipantActor, PatientCtx, S
 from app.models.enums import AppointmentStatus
 from app.routes.docs import errs
 from app.schemas.appointments import (
-    AppointmentCreate, AppointmentDecision, AppointmentHistoryOut, AppointmentOut, AppointmentReject, AppointmentReschedule,
+    AppointmentCancel, AppointmentCreate, AppointmentDecision, AppointmentHistoryOut, AppointmentOut,
+    AppointmentReject, AppointmentReschedule, AppointmentRescheduleRequest, ReschedulingRequestOut,
 )
 from app.schemas.common import Page, make_page
 from app.services.appointment_service import AppointmentService
@@ -67,10 +68,10 @@ async def reject(appointment_id: ObjectIdPath, payload: AppointmentReject, ctx: 
 
 
 @router.post("/{appointment_id}/cancel", response_model=AppointmentOut, summary="Cancel an appointment",
-             description=("`REQUESTED`/`CONFIRMED` → `CANCELLED` by the patient or the doctor, before it starts. The slot becomes AVAILABLE again and "
-                          "cancelled-slot recovery notifies eligible waitlisted patients. **Auth:** PATIENT or DOCTOR of the appointment."),
-             responses=errs(401, 403, 404, 409, 422))
-async def cancel(appointment_id: ObjectIdPath, payload: AppointmentDecision, actor: ParticipantActor, db: DB, settings: SettingsDep) -> Any:
+             description=("`REQUESTED`/`CONFIRMED`/`RESCHEDULE_REQUESTED` → `CANCELLED` by the patient or doctor, before it starts. "
+                          "Requires a mandatory cancellation reason. The slot is freed and offered to waitlisted patients. **Auth:** PATIENT or DOCTOR."),
+             responses=errs(400, 401, 403, 404, 409, 422))
+async def cancel(appointment_id: ObjectIdPath, payload: AppointmentCancel, actor: ParticipantActor, db: DB, settings: SettingsDep) -> Any:
     return to_api(await _svc(db, settings).cancel(actor, appointment_id, payload.reason))
 
 
@@ -87,9 +88,18 @@ async def no_show(appointment_id: ObjectIdPath, payload: AppointmentDecision, ct
 
 
 @router.post("/{appointment_id}/reschedule", response_model=AppointmentOut, summary="Reschedule to another slot of the same doctor",
-             description=("**Patient:** the new slot is held and the appointment returns to `REQUESTED` — the doctor must approve the new time. "
-                          "**Doctor:** a `CONFIRMED` appointment moves directly and stays `CONFIRMED`. The old slot is freed atomically. "
+             description=("**Patient:** creates a rescheduling request, holds the new slot, and marks appointment `RESCHEDULE_REQUESTED`. "
+                          "The original appointment remains valid until doctor approves. "
+                          "**Doctor:** a `CONFIRMED` appointment moves directly and stays `CONFIRMED`. "
                           "**Auth:** PATIENT or DOCTOR of the appointment."),
              responses=errs(400, 401, 403, 404, 409, 422))
-async def reschedule(appointment_id: ObjectIdPath, payload: AppointmentReschedule, actor: ParticipantActor, db: DB, settings: SettingsDep) -> Any:
+async def reschedule(appointment_id: ObjectIdPath, payload: AppointmentRescheduleRequest, actor: ParticipantActor, db: DB, settings: SettingsDep) -> Any:
     return to_api(await _svc(db, settings).reschedule(actor, appointment_id, payload.new_slot_id, payload.reason))
+
+
+@router.get("/{appointment_id}/reschedule-requests", response_model=list[ReschedulingRequestOut], summary="List rescheduling requests for an appointment",
+            description="Returns all rescheduling requests (pending, approved, rejected, cancelled) for this appointment. **Auth:** PATIENT or DOCTOR.",
+            responses=errs(401, 403, 404, 422))
+async def get_reschedule_requests(appointment_id: ObjectIdPath, actor: ParticipantActor, db: DB, settings: SettingsDep) -> Any:
+    items = await _svc(db, settings).list_reschedule_requests_for_appointment(actor, appointment_id)
+    return [to_api(i) for i in items]

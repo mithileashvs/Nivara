@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import * as authApi from '../api/auth'
 import * as doctorsApi from '../api/doctors'
-import { loadToken, setToken, setUnauthorizedHandler } from '../api/client'
+import { getToken, loadToken, setToken, setUnauthorizedHandler } from '../api/client'
 import { ROLES } from '../utils/constants'
 
 const AuthContext = createContext(null)
@@ -107,6 +107,10 @@ export function AuthProvider({ children }) {
   )
 
   const signOut = useCallback(() => {
+    const token = getToken() || loadToken()
+    if (token) {
+      authApi.logout(token).catch(() => {})
+    }
     setSessionEnded(false)
     clear()
   }, [clear])

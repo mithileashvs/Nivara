@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { CalendarCheck, CalendarDays, LayoutGrid, Stethoscope } from 'lucide-react'
+import { BarChart3, CalendarCheck, CalendarDays, LayoutGrid, ScrollText, ShieldAlert, Stethoscope } from 'lucide-react'
 import { PageHeader } from '../../components/Topbar'
 import { StatCard } from '../../components/StatCard'
 import { IntakeToggle } from '../../components/IntakeToggle'
@@ -121,17 +121,40 @@ export default function HospitalDashboard() {
         title="Hospital dashboard"
         description={h?.address}
         actions={
-          ids.length > 1 ? (
-            <Select
-              aria-label="Hospital"
-              value={hospitalId}
-              onChange={(e) => setHospitalId(e.target.value)}
-              options={ids.map((id) => ({ value: id, label: hospitalById[id]?.name || 'Hospital' }))}
-              className="min-w-[13rem]"
-            />
-          ) : (
-            <span className="text-sm font-medium text-forest-700">{hospitalById[hospitalId]?.name}</span>
-          )
+          <div className="flex flex-wrap items-center gap-3">
+            {ids.length > 1 ? (
+              <Select
+                aria-label="Hospital"
+                value={hospitalId}
+                onChange={(e) => setHospitalId(e.target.value)}
+                options={ids.map((id) => ({ value: id, label: hospitalById[id]?.name || 'Hospital' }))}
+                className="min-w-[13rem]"
+              />
+            ) : (
+              <span className="text-sm font-medium text-forest-700">{hospitalById[hospitalId]?.name}</span>
+            )}
+            <Link
+              to="/hospital/analytics"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-forest px-3.5 text-sm font-medium text-canvas transition-colors hover:bg-forest-700 focus-ring"
+            >
+              <BarChart3 size={16} aria-hidden="true" />
+              Analytics
+            </Link>
+            <Link
+              to="/hospital/audit-logs"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-3.5 text-sm font-medium text-forest-700 transition-colors hover:border-forest-200 hover:bg-forest-50 focus-ring"
+            >
+              <ScrollText size={16} aria-hidden="true" />
+              Audit logs
+            </Link>
+            <Link
+              to="/hospital/security"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-3.5 text-sm font-medium text-forest-700 transition-colors hover:border-forest-200 hover:bg-forest-50 focus-ring"
+            >
+              <ShieldAlert size={16} aria-hidden="true" />
+              Security
+            </Link>
+          </div>
         }
       />
 
@@ -209,7 +232,10 @@ export default function HospitalDashboard() {
               ) : (
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={byStatus} margin={{ top: 8, right: 8, bottom: 8, left: -18 }}>
+                    <BarChart
+                      data={byStatus}
+                      margin={{ top: 8, right: 8, bottom: byStatus.length > 3 ? 20 : 8, left: -18 }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="#E4E7DF" vertical={false} />
                       <XAxis
                         dataKey="label"
@@ -217,11 +243,19 @@ export default function HospitalDashboard() {
                         axisLine={{ stroke: '#E4E7DF' }}
                         tickLine={false}
                         interval={0}
+                        angle={byStatus.length > 3 ? -15 : 0}
+                        textAnchor={byStatus.length > 3 ? 'end' : 'middle'}
+                        height={byStatus.length > 3 ? 48 : 30}
                       />
                       <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#5C6B61' }} axisLine={false} tickLine={false} />
                       <Tooltip
                         cursor={{ fill: '#EEF3F0' }}
-                        contentStyle={{ borderRadius: 12, border: '1px solid #E4E7DF', fontSize: 12 }}
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: '1px solid #E4E7DF',
+                          fontSize: 12,
+                          boxShadow: '0 8px 24px -16px rgba(23,60,43,0.3)',
+                        }}
                       />
                       <Bar dataKey="count" name="Appointments" radius={[6, 6, 0, 0]} maxBarSize={56}>
                         {byStatus.map((e) => (

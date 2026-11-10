@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react'
+import { Alert } from './ui/Alert'
 import { ROUTING_DISCLAIMER } from '../utils/constants'
 
 /**
@@ -11,14 +11,13 @@ export function MedicalDisclaimer({ text = ROUTING_DISCLAIMER, emergencyNotice, 
   return (
     <div className={`space-y-3 ${className}`}>
       {emergencyNotice && (
-        <p className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-forest-700" role="alert">
-          {emergencyNotice}
-        </p>
+        <Alert tone="danger">
+          <span className="font-medium">{emergencyNotice}</span>
+        </Alert>
       )}
-      <p className="flex items-start gap-2.5 rounded-xl border border-line bg-forest-50/60 px-4 py-3 text-xs leading-relaxed text-ink-muted">
-        <Info size={15} className="mt-0.5 shrink-0 text-forest-400" aria-hidden="true" />
-        <span>{text}</span>
-      </p>
+      <Alert tone="info" className="text-xs">
+        {text}
+      </Alert>
     </div>
   )
 }

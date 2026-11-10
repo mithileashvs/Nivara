@@ -4,6 +4,7 @@ import { ArrowLeft, CalendarCheck, LayoutGrid, Plus } from 'lucide-react'
 import { PageHeader } from '../../components/Topbar'
 import { IntakeToggle } from '../../components/IntakeToggle'
 import { StatCard } from '../../components/StatCard'
+import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
 import { StatusBadge } from '../../components/ui/StatusBadge'
@@ -90,10 +91,10 @@ export default function HospitalDetail({ basePath = '/admin' }) {
         }
       />
 
-      <p className="rounded-xl border border-line bg-forest-50/60 px-4 py-3 text-sm text-ink-muted">
+      <Alert tone="info">
         Closing intake stops new requests only. Appointments that are already requested or confirmed
         are never cancelled by it.
-      </p>
+      </Alert>
 
       {availability.loading ? (
         <LoadingSkeleton variant="stats" rows={2} />

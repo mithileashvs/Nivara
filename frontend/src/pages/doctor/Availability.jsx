@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { CalendarPlus, CalendarX2, Clock, Lock, Unlock } from 'lucide-react'
 import { PageHeader } from '../../components/Topbar'
+import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
 import { Modal, ConfirmationModal } from '../../components/ui/Modal'
@@ -104,10 +105,10 @@ export default function DoctorAvailability() {
       />
 
       {!isActive && (
-        <p className="rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-forest-700">
+        <Alert tone="warn">
           Your profile must be active, with a hospital and department assigned, before you can
           publish availability. An administrator does that.
-        </p>
+        </Alert>
       )}
 
       <Tabs
@@ -141,7 +142,7 @@ export default function DoctorAvailability() {
         >
           <div className="space-y-3">
             {(windows.data?.items ?? []).map((w) => (
-              <Card key={w.id}>
+              <Card key={w.id} interactive>
                 <CardBody className="flex flex-wrap items-center justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -340,10 +341,10 @@ function AddWindowModal({ open, onClose, doctorProfile, onDone }) {
     >
       <div className="space-y-4">
         {hospitals.length === 0 && (
-          <p className="rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-forest-700">
+          <Alert tone="warn">
             You are not assigned to a hospital or department yet. An administrator needs to do that
             before you can publish hours.
-          </p>
+          </Alert>
         )}
 
         <Select

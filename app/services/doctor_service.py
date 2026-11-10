@@ -5,9 +5,20 @@ from typing import Any
 from app.core.config import Settings
 from app.core.errors import BadRequestError, NotFoundError
 from app.database.collections import C
-from app.models.enums import IntakeStatus, ProfileStatus, SlotStatus
+from app.models.enums import (
+    AuditAction,
+    AuditActorRole,
+    AuditEntityType,
+    AuditSeverity,
+    IntakeStatus,
+    NotificationType,
+    ProfileStatus,
+    SlotStatus,
+)
 from app.schemas.users import DoctorAffiliationUpdate, DoctorSearchParams, DoctorUpdate
+from app.services.audit_service import AuditService
 from app.services.intake_service import IntakeService
+from app.services.notification_service import NotificationService
 from app.utils.geo import haversine_km
 from app.utils.object_id import oid, oids
 from app.utils.pagination import PageParams, paginate
@@ -25,6 +36,7 @@ class DoctorService:
         self.db = db
         self.settings = settings
         self.intake = IntakeService(db)
+        self.audit = AuditService(db, settings)
 
     @property
     def coll(self) -> Any:
@@ -148,16 +160,42 @@ class DoctorService:
         doc = await self.coll.find_one_and_update({"_id": doctor["_id"]}, {"$set": fields}, return_document=True)
         return doctor_view(doc)
 
-    async def set_intake(self, doctor_id: str, status: IntakeStatus) -> tuple[dict, IntakeStatus]:
+    async def set_intake(
+        self,
+        doctor_id: str,
+        status: IntakeStatus,
+        *,
+        actor: dict | None = None,
+        reason: str | None = None,
+    ) -> tuple[dict, IntakeStatus]:
         doctor = await self.get_any(doctor_id)
         previous = IntakeStatus(doctor["availability_status"])
         doc = await self.coll.find_one_and_update(
             {"_id": doctor["_id"]}, {"$set": {"availability_status": status.value, "updated_at": utcnow()}}, return_document=True
         )
+        hosp_ids = doctor.get("hospital_ids") or []
+        await self.audit.log_event(
+            action=AuditAction.DOCTOR_INTAKE_UPDATED,
+            entity_type=AuditEntityType.DOCTOR,
+            entity_id=doctor["_id"],
+            actor_id=actor["_id"] if actor else None,
+            actor_role=str(actor["role"]) if actor else AuditActorRole.ADMIN,
+            hospital_id=str(hosp_ids[0]) if len(hosp_ids) == 1 else None,
+            description=f"Doctor {doctor['name']} intake changed from {previous.value} to {status.value}",
+            metadata={"previous_status": previous.value, "new_status": status.value, "reason": reason, "hospital_ids": hosp_ids},
+        )
         return doctor_view(doc), previous
 
-    async def set_affiliations(self, doctor_id: str, payload: DoctorAffiliationUpdate) -> dict:
+    async def set_affiliations(
+        self,
+        doctor_id: str,
+        payload: DoctorAffiliationUpdate,
+        *,
+        actor: dict | None = None,
+    ) -> dict:
         doctor = await self.get_any(doctor_id)
+        prev_hospitals = list(doctor.get("hospital_ids") or [])
+        prev_depts = list(doctor.get("department_ids") or [])
         hospital_ids, dept_ids = oids(payload.hospital_ids), oids(payload.department_ids)
         hospitals = await self.db[C.HOSPITALS].count_documents({"_id": {"$in": hospital_ids}})
         if hospitals != len(set(hospital_ids)):
@@ -167,17 +205,95 @@ class DoctorService:
             raise BadRequestError(
                 "Every department must exist and belong to one of the listed hospitals", code="invalid_department"
             )
+        clean_hospitals = list(dict.fromkeys(hospital_ids))
+        clean_depts = list(dict.fromkeys(dept_ids))
         doc = await self.coll.find_one_and_update(
             {"_id": doctor["_id"]},
-            {"$set": {"hospital_ids": list(dict.fromkeys(hospital_ids)), "department_ids": list(dict.fromkeys(dept_ids)), "updated_at": utcnow()}},
+            {"$set": {"hospital_ids": clean_hospitals, "department_ids": clean_depts, "updated_at": utcnow()}},
             return_document=True,
+        )
+        await self.audit.log_event(
+            action=AuditAction.DOCTOR_AFFILIATIONS_UPDATED,
+            entity_type=AuditEntityType.DOCTOR,
+            entity_id=doctor["_id"],
+            actor_id=actor["_id"] if actor else None,
+            actor_role=str(actor["role"]) if actor else AuditActorRole.ADMIN,
+            hospital_id=str(clean_hospitals[0]) if len(clean_hospitals) == 1 else None,
+            description=f"Updated hospital/department affiliations for Dr. {doctor['name']}",
+            metadata={
+                "doctor_name": doctor["name"],
+                "previous_hospital_ids": prev_hospitals,
+                "new_hospital_ids": clean_hospitals,
+                "previous_department_ids": prev_depts,
+                "new_department_ids": clean_depts,
+            },
         )
         return doctor_view(doc)
 
-    async def set_profile_status(self, doctor_id: str, status: ProfileStatus) -> dict:
+    async def set_profile_status(
+        self,
+        doctor_id: str,
+        status: ProfileStatus,
+        *,
+        reason: str | None = None,
+        actor: dict | None = None,
+    ) -> dict:
         doctor = await self.get_any(doctor_id)
+        prev_status = str(doctor.get("profile_status") or ProfileStatus.PENDING.value)
+        clean_reason = reason.strip() if reason and reason.strip() else None
         doc = await self.coll.find_one_and_update(
             {"_id": doctor["_id"]}, {"$set": {"profile_status": status.value, "updated_at": utcnow()}}, return_document=True
+        )
+        hosp_ids = doctor.get("hospital_ids") or []
+        if status == ProfileStatus.ACTIVE:
+            action = AuditAction.DOCTOR_VERIFIED
+            severity = AuditSeverity.INFO
+            desc = f"Doctor profile verified/activated for {doctor['name']}"
+            await NotificationService(self.db).notify(
+                user_id=doctor["user_id"],
+                type=NotificationType.DOCTOR_VERIFIED.value,
+                title="Profile verified and active",
+                message="Your doctor profile has been verified by the administrator. You can now publish your schedule and accept appointment requests.",
+                category="SYSTEM",
+                action_url="/doctor/availability",
+            )
+        elif status == ProfileStatus.SUSPENDED:
+            action = AuditAction.DOCTOR_SUSPENDED
+            severity = AuditSeverity.WARNING
+            desc = f"Doctor profile suspended/rejected for {doctor['name']}"
+            susp_msg = "Your doctor profile has been suspended by an administrator. Please contact your hospital administrator."
+            if clean_reason:
+                susp_msg += f" Reason: {clean_reason}"
+            await NotificationService(self.db).notify(
+                user_id=doctor["user_id"],
+                type=NotificationType.DOCTOR_SUSPENDED.value,
+                title="Profile suspended",
+                message=susp_msg,
+                category="SYSTEM",
+                action_url="/doctor/profile",
+            )
+        else:
+            action = AuditAction.DOCTOR_SET_PENDING
+            severity = AuditSeverity.INFO
+            desc = f"Doctor profile moved to PENDING for {doctor['name']}"
+
+        await self.audit.log_event(
+            action=action,
+            entity_type=AuditEntityType.DOCTOR,
+            entity_id=doctor["_id"],
+            actor_id=actor["_id"] if actor else None,
+            actor_role=str(actor["role"]) if actor else AuditActorRole.ADMIN,
+            hospital_id=str(hosp_ids[0]) if len(hosp_ids) == 1 else None,
+            severity=severity,
+            description=desc,
+            metadata={
+                "doctor_name": doctor["name"],
+                "specialty": doctor.get("specialty"),
+                "previous_status": prev_status,
+                "new_status": status.value,
+                "reason": clean_reason,
+                "hospital_ids": hosp_ids,
+            },
         )
         return doctor_view(doc)
 
@@ -193,6 +309,9 @@ class DoctorService:
             "doctor_id": doctor_id, "appointment_date": today_str, "status": {"$in": ["CONFIRMED", "COMPLETED", "NO_SHOW"]},
         })
         pending_requests = await appts.count_documents({"doctor_id": doctor_id, "status": "REQUESTED"})
+        pending_reschedule_requests = await self.db[C.RESCHEDULING_REQUESTS].count_documents({
+            "doctor_id": doctor_id, "status": "REQUESTED"
+        })
         confirmed_appointments = await appts.count_documents({"doctor_id": doctor_id, "status": "CONFIRMED"})
         completed_appointments = await appts.count_documents({"doctor_id": doctor_id, "status": "COMPLETED"})
         patient_rows = await appts.aggregate(
@@ -203,6 +322,7 @@ class DoctorService:
         return {
             "todays_appointments": todays_appointments,
             "pending_requests": pending_requests,
+            "pending_reschedule_requests": pending_reschedule_requests,
             "confirmed_appointments": confirmed_appointments,
             "completed_appointments": completed_appointments,
             "total_patients": total_patients,

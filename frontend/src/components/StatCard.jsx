@@ -1,28 +1,41 @@
+import { ArrowUpRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
+
+const TONE_CHIP = {
+  warn: 'bg-warn-soft text-warn',
+  positive: 'bg-ok-soft text-ok',
+  danger: 'bg-danger-soft text-danger',
+  info: 'bg-info-soft text-info',
+  default: 'bg-forest-50 text-forest-500',
+}
 
 /** Reference stat tile: icon chip, large figure, quiet label. */
 export function StatCard({ icon: Icon, value, label, hint, to, tone = 'default' }) {
-  const chip =
-    tone === 'warn'
-      ? 'bg-warn-soft text-warn'
-      : tone === 'positive'
-        ? 'bg-ok-soft text-ok'
-        : 'bg-forest-50 text-forest-500'
+  const chip = TONE_CHIP[tone] || TONE_CHIP.default
 
   const body = (
     <>
-      <span className={`mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl ${chip}`}>
-        <Icon size={19} aria-hidden="true" />
-      </span>
-      <p className="text-3xl font-bold tabular-nums leading-none text-forest-700">{value}</p>
-      <p className="mt-2 text-sm text-ink-muted">{label}</p>
-      {hint && <p className="mt-1 text-xs text-ink-faint">{hint}</p>}
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${chip}`}>
+          <Icon size={19} aria-hidden="true" />
+        </span>
+        {to && (
+          <ArrowUpRight
+            size={15}
+            className="text-ink-faint transition-transform duration-150 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-forest-500"
+            aria-hidden="true"
+          />
+        )}
+      </div>
+      <p className="text-3xl font-bold tabular-nums leading-none tracking-tight text-forest-700">{value}</p>
+      <p className="mt-2 text-sm font-medium text-ink-muted">{label}</p>
+      {hint && <p className="mt-1 text-xs leading-relaxed text-ink-faint">{hint}</p>}
     </>
   )
 
   if (to) {
     return (
-      <Link to={to} className="card block p-5 transition-colors hover:border-forest-200 focus-ring">
+      <Link to={to} className="group card-interactive block p-5 focus-ring">
         {body}
       </Link>
     )

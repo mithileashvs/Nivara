@@ -5,18 +5,26 @@
  * columns: [{ key, header, render(row), className, hideOnMobile }]
  */
 export function DataTable({ columns, rows, rowKey = (r) => r.id, caption, onRowClick }) {
+  const handleKeyDown = (e, row) => {
+    if (!onRowClick) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onRowClick(row)
+    }
+  }
+
   return (
     <>
       <div className="scroll-x hidden md:block">
         <table className="w-full min-w-[40rem] border-collapse text-left">
           {caption && <caption className="sr-only">{caption}</caption>}
           <thead>
-            <tr className="border-b border-line">
+            <tr className="border-b border-line bg-surface-muted/60">
               {columns.map((c) => (
                 <th
                   key={c.key}
                   scope="col"
-                  className={`whitespace-nowrap px-5 py-3 text-xs font-semibold text-ink-muted ${c.className || ''}`}
+                  className={`whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-muted ${c.className || ''}`}
                 >
                   {c.header}
                 </th>
@@ -27,7 +35,12 @@ export function DataTable({ columns, rows, rowKey = (r) => r.id, caption, onRowC
             {rows.map((row) => (
               <tr
                 key={rowKey(row)}
-                className={`transition-colors hover:bg-forest-50/60 ${onRowClick ? 'cursor-pointer' : ''}`}
+                tabIndex={onRowClick ? 0 : undefined}
+                role={onRowClick ? 'button' : undefined}
+                onKeyDown={onRowClick ? (e) => handleKeyDown(e, row) : undefined}
+                className={`transition-colors hover:bg-forest-50/60 ${
+                  onRowClick ? 'cursor-pointer focus-visible:bg-forest-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest' : ''
+                }`}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {columns.map((c) => (
@@ -43,7 +56,16 @@ export function DataTable({ columns, rows, rowKey = (r) => r.id, caption, onRowC
 
       <ul className="divide-y divide-line md:hidden">
         {rows.map((row) => (
-          <li key={rowKey(row)} className="px-4 py-4">
+          <li
+            key={rowKey(row)}
+            tabIndex={onRowClick ? 0 : undefined}
+            role={onRowClick ? 'button' : undefined}
+            onClick={onRowClick ? () => onRowClick(row) : undefined}
+            onKeyDown={onRowClick ? (e) => handleKeyDown(e, row) : undefined}
+            className={`px-4 py-4 transition-colors ${
+              onRowClick ? 'cursor-pointer hover:bg-forest-50/60 active:bg-forest-50 focus-ring' : ''
+            }`}
+          >
             <dl className="space-y-2">
               {columns
                 .filter((c) => !c.hideOnMobile)

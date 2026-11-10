@@ -1,7 +1,6 @@
-import { Lock } from 'lucide-react'
+import { CalendarOff, Check, Lock } from 'lucide-react'
 import { formatTime } from '../utils/format'
 import { EmptyState, LoadingBlock, ErrorState } from './ui/States'
-import { CalendarOff } from 'lucide-react'
 
 /**
  * Time chips for one day. Bookability is taken verbatim from the backend's
@@ -38,14 +37,15 @@ export function SlotSelector({ slots, value, onChange, loading, error, onRetry, 
             disabled={disabled}
             title={disabled ? slot.unavailable_reason || 'Not available' : undefined}
             onClick={() => onChange(slot)}
-            className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors focus-ring ${
+            className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all duration-150 focus-ring ${
               selected
-                ? 'border-forest bg-forest text-canvas'
+                ? 'border-forest bg-forest text-canvas shadow-sm'
                 : disabled
-                  ? 'cursor-not-allowed border-line bg-forest-50/50 text-ink-faint line-through'
-                  : 'border-line bg-surface text-forest-700 hover:border-forest-300 hover:bg-forest-50'
+                  ? 'cursor-not-allowed border-line bg-surface-muted/70 text-ink-faint line-through'
+                  : 'border-line bg-surface text-forest-700 hover:-translate-y-0.5 hover:border-forest-300 hover:bg-forest-50 hover:shadow-card'
             }`}
           >
+            {selected && <Check size={14} strokeWidth={2.5} aria-hidden="true" />}
             {disabled && <Lock size={12} aria-hidden="true" />}
             {formatTime(slot.start_time)}
           </button>

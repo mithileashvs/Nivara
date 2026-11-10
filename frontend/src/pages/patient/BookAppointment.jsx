@@ -4,6 +4,7 @@ import { ArrowLeft, Building2, CalendarDays, CheckCircle2, Clock, Stethoscope } 
 import { Stepper } from '../../components/Stepper'
 import { SlotSelector } from '../../components/SlotSelector'
 import { Calendar } from '../../components/Calendar'
+import { Alert } from '../../components/ui/Alert'
 import { Avatar } from '../../components/ui/Avatar'
 import { Button } from '../../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
@@ -216,19 +217,10 @@ export default function BookAppointment() {
             </Card>
           )}
 
-          <Card className="border-forest-200 bg-forest-50/60">
-            <CardBody className="flex gap-3">
-              <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-forest-400" aria-hidden="true" />
-              <div className="text-sm leading-relaxed text-ink-muted">
-                <p className="font-semibold text-forest-700">What happens next</p>
-                <p className="mt-1">
-                  This sends a request to {d.name} and holds the time while they decide. The
-                  appointment shows as awaiting a decision until they accept it. You will be notified
-                  either way.
-                </p>
-              </div>
-            </CardBody>
-          </Card>
+          <Alert tone="positive" icon={CheckCircle2} title="What happens next">
+            This sends a request to {d.name} and holds the time while they decide. The appointment
+            shows as awaiting a decision until they accept it. You will be notified either way.
+          </Alert>
 
           <div className="flex flex-wrap gap-3">
             <Button variant="outline" size="lg" className="flex-1 justify-center" onClick={() => setStep(2)} disabled={submitting}>

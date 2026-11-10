@@ -3,6 +3,7 @@
 Nothing secret has a default value: the app refuses to start without a JWT
 secret and a MongoDB URI, and refuses weak secrets in production.
 """
+import ipaddress
 from functools import lru_cache
 from typing import Annotated, Literal
 
@@ -89,6 +90,16 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     api_prefix: str = "/api/v1"
 
+    # --- proxy & client IP handling ---
+    # Security rule: forwarded IP headers (X-Forwarded-For, X-Real-IP) are NEVER
+    # trusted unless trust_proxy_headers=True AND the direct socket peer IP matches
+    # a configured IP/CIDR in trusted_proxy_ips.
+    # For Render production deployments behind Render's TLS reverse proxy, set:
+    #   TRUST_PROXY_HEADERS=true
+    #   TRUSTED_PROXY_IPS=127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10
+    trust_proxy_headers: bool = False
+    trusted_proxy_ips: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
     # --- scheduling ---
     app_timezone: str = "Asia/Kolkata"
     request_hold_minutes: int = Field(default=720, ge=1)
@@ -104,6 +115,7 @@ class Settings(BaseSettings):
     # --- waitlist ---
     waitlist_notify_top_n: int = Field(default=3, ge=1, le=20)
     waitlist_max_active_entries_per_patient: int = Field(default=10, ge=1)
+    waitlist_offer_expiry_minutes: int = Field(default=15, ge=1, le=1440)
 
     # --- rate limiting ---
     rate_limit_enabled: bool = True
@@ -112,14 +124,38 @@ class Settings(BaseSettings):
     # --- documents (metadata only; files live in external object storage) ---
     allowed_document_hosts: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
+    # --- medical documents & object storage (Phase 4) ---
+    supabase_url: str | None = None
+    supabase_service_role_key: SecretStr | None = None
+    supabase_storage_bucket: str = "medical-documents"
+    document_storage_provider: Literal["local", "supabase"] = "local"
+    local_storage_dir: str = "storage/medical_documents"
+    max_document_upload_bytes: int = Field(default=25 * 1024 * 1024, ge=1024)  # 25 MB
+
     matching_config: MatchingConfig = Field(default_factory=MatchingConfig)
 
-    @field_validator("cors_origins", "allowed_document_hosts", mode="before")
+    @field_validator("cors_origins", "allowed_document_hosts", "trusted_proxy_ips", mode="before")
     @classmethod
     def _split_csv(cls, v):
         if isinstance(v, str):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
+
+    @field_validator("trusted_proxy_ips")
+    @classmethod
+    def _validate_trusted_proxy_ips(cls, v: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for entry in v:
+            cleaned = str(entry).strip()
+            if not cleaned:
+                continue
+            if cleaned == "*":
+                raise ValueError(
+                    "TRUSTED_PROXY_IPS must list explicit IPs or CIDR ranges; wildcard '*' is not allowed"
+                )
+            net = ipaddress.ip_network(cleaned, strict=False)
+            normalized.append(str(net))
+        return normalized
 
     @field_validator("app_timezone")
     @classmethod
@@ -134,6 +170,13 @@ class Settings(BaseSettings):
         secret = self.jwt_secret.get_secret_value()
         if not secret:
             raise ValueError("JWT_SECRET must be set")
+
+        if self.document_storage_provider == "supabase":
+            if not self.supabase_url:
+                raise ValueError("SUPABASE_URL must be configured when DOCUMENT_STORAGE_PROVIDER is 'supabase'")
+            if not self.supabase_service_role_key or not self.supabase_service_role_key.get_secret_value():
+                raise ValueError("SUPABASE_SERVICE_ROLE_KEY must be configured when DOCUMENT_STORAGE_PROVIDER is 'supabase'")
+
         if self.environment == "production":
             if len(secret) < 32:
                 raise ValueError("JWT_SECRET must be at least 32 characters in production")

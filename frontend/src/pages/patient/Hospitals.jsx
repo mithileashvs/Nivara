@@ -97,7 +97,7 @@ export default function PatientHospitals() {
       >
         <div className="grid gap-4 sm:grid-cols-2">
           {paged.items.map((h) => (
-            <Card key={h.id}>
+            <Card key={h.id} interactive>
               <CardBody className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <h2 className="min-w-0 text-base font-semibold text-forest-700">{h.name}</h2>

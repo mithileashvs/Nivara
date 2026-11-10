@@ -111,6 +111,14 @@ export function pluralise(n, one, many) {
   return `${n} ${n === 1 ? one : many}`
 }
 
+export function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+}
+
 /** Turn a snake/upper-case enum into readable text: NO_SHOW → "No show". */
 export function humanise(value) {
   if (!value) return ''

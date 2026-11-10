@@ -24,13 +24,17 @@ export function AppointmentCard({
   const detailPath = to || (perspective === 'patient' ? `/appointments/${a.id}` : `/doctor/appointments/${a.id}`)
 
   return (
-    <article className="card flex flex-wrap items-center gap-4 p-4 transition-colors hover:border-forest-200">
+    <article className="card-interactive flex flex-wrap items-center gap-4 p-4">
       <DateBlock date={a.appointment_date} size={compact ? 'sm' : 'md'} />
 
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <Avatar name={counterparty} size="sm" className="hidden sm:inline-flex" />
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-forest-700">{counterparty}</h3>
+          <h3 className="truncate text-sm font-semibold text-forest-700">
+            <Link to={detailPath} className="rounded transition-colors hover:text-forest focus-ring">
+              {counterparty}
+            </Link>
+          </h3>
           <p className="mt-0.5 truncate text-xs text-ink-muted">
             {[subtitle, hospitalName || null, departmentName || null].filter(Boolean).join(' · ') || '\u00A0'}
           </p>
@@ -47,7 +51,7 @@ export function AppointmentCard({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2.5 sm:gap-3">
         <StatusBadge status={a.status} />
         {actions}
         <Link

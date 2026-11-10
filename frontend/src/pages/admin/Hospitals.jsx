@@ -17,15 +17,17 @@ import { useDebounced } from '../../hooks/useDebounced'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { createHospital, listHospitals, setHospitalIntake } from '../../api/hospitals'
+import { createHospital, setHospitalIntake } from '../../api/hospitals'
+import { listAdminHospitals } from '../../api/admin'
 import { INTAKE_STATUS } from '../../utils/constants'
 import { pluralise } from '../../utils/format'
 import { errorMessage, fieldErrors } from '../../utils/errors'
 
 export default function AdminHospitals() {
   useDocumentTitle('Hospitals')
-  const { isPlatformAdmin } = useAuth()
+  const { isPlatformAdmin, isHospitalAdmin } = useAuth()
   const toast = useToast()
+  const basePath = isHospitalAdmin ? '/hospital' : '/admin'
 
   const [query, setQuery] = useState('')
   const debounced = useDebounced(query)
@@ -33,7 +35,7 @@ export default function AdminHospitals() {
   const [createOpen, setCreateOpen] = useState(false)
 
   const paged = usePaged(
-    (p) => listHospitals({ ...p, q: debounced || undefined, intake_status: intake || undefined }),
+    (p) => listAdminHospitals({ ...p, q: debounced || undefined, intake_status: intake || undefined }),
     [debounced, intake],
   )
 
@@ -53,7 +55,11 @@ export default function AdminHospitals() {
     <div className="space-y-6">
       <PageHeader
         title="Hospitals"
-        description="Facilities on the platform and whether they are taking new appointments."
+        description={
+          isHospitalAdmin
+            ? 'Facilities assigned to your administrator scope, live capacity counts, and intake controls.'
+            : 'Facilities on the platform, live operational counts, and appointment intake status.'
+        }
         actions={
           isPlatformAdmin && (
             <Button onClick={() => setCreateOpen(true)}>
@@ -92,19 +98,19 @@ export default function AdminHospitals() {
         empty={
           <EmptyState
             icon={Building2}
-            title="No hospitals yet"
-            description={isPlatformAdmin ? 'Create the first one to get started.' : 'Nothing matches those filters.'}
+            title="No hospitals found"
+            description={isPlatformAdmin ? 'Create a hospital or clear your filters.' : 'Nothing matches those filters within your assigned scope.'}
             action={isPlatformAdmin && <Button onClick={() => setCreateOpen(true)}>New hospital</Button>}
           />
         }
       >
         <div className="space-y-3">
           {paged.items.map((h) => (
-            <Card key={h.id}>
+            <Card key={h.id} className="transition-colors hover:border-forest-200">
               <CardBody className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
                   <Link
-                    to={`/admin/hospitals/${h.id}`}
+                    to={`${basePath}/hospitals/${h.id}`}
                     className="rounded text-base font-semibold text-forest-700 transition-colors hover:text-forest focus-ring"
                   >
                     {h.name}
@@ -112,11 +118,19 @@ export default function AdminHospitals() {
                   <p className="mt-1 text-sm text-ink-muted">{h.address}</p>
                   <p className="mt-0.5 text-xs text-ink-muted">
                     {[h.location?.city, h.location?.state].filter(Boolean).join(', ')} ·{' '}
-                    {pluralise(h.department_ids?.length ?? 0, 'department', 'departments')}
+                    {pluralise(h.department_count ?? h.department_ids?.length ?? 0, 'department', 'departments')} ·{' '}
+                    {pluralise(h.active_doctor_count ?? 0, 'verified doctor', 'verified doctors')} ·{' '}
+                    {pluralise(h.active_appointments_count ?? 0, 'active appointment', 'active appointments')}
                   </p>
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-3">
+                <div className="flex shrink-0 flex-wrap items-center gap-2.5">
                   <StatusBadge status={h.appointment_intake_status} kind="generic" />
+                  <Link
+                    to={`${basePath}/hospitals/${h.id}`}
+                    className="inline-flex h-9 items-center rounded-xl border border-line bg-surface px-3 text-xs font-medium text-forest-700 transition-colors hover:border-forest-200 hover:bg-forest-50 focus-ring"
+                  >
+                    Manage facility
+                  </Link>
                   <IntakeToggle
                     status={h.appointment_intake_status}
                     label={h.name}

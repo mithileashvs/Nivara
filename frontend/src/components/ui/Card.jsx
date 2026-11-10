@@ -1,6 +1,6 @@
-export function Card({ as: Tag = 'div', className = '', children, ...props }) {
+export function Card({ as: Tag = 'div', interactive = false, className = '', children, ...props }) {
   return (
-    <Tag className={`card ${className}`} {...props}>
+    <Tag className={`${interactive ? 'card-interactive' : 'card'} ${className}`} {...props}>
       {children}
     </Tag>
   )

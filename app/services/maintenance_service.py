@@ -62,4 +62,5 @@ class MaintenanceService:
             "expired_holds": await self.expire_stale_holds(),
             "reminders_sent": await self.send_due_reminders(),
             "waitlist_entries_expired": await self.waitlist.expire_old(),
+            "waitlist_offers_expired": await self.waitlist.expire_pending_offers(),
         }

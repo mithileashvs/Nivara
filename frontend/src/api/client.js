@@ -6,6 +6,17 @@ const BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').repl
 export const API_PREFIX = '/api/v1'
 export const API_ROOT = `${BASE}${API_PREFIX}`
 
+export function getNotificationsWsUrl(token) {
+  let wsBase
+  if (/^https?:\/\//i.test(BASE)) {
+    wsBase = BASE.replace(/^http(s?):\/\//i, (_, s) => (s ? 'wss://' : 'ws://'))
+  } else {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    wsBase = `${protocol}//${window.location.host}${BASE}`
+  }
+  return `${wsBase}${API_PREFIX}/notifications/ws?token=${encodeURIComponent(token)}`
+}
+
 export const api = axios.create({
   baseURL: API_ROOT,
   headers: { 'Content-Type': 'application/json' },

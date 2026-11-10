@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Users } from 'lucide-react'
 import { PageHeader } from '../../components/Topbar'
 import { SearchBar } from '../../components/SearchBar'
@@ -20,6 +20,7 @@ import { formatDate, pluralise } from '../../utils/format'
  */
 export default function DoctorPatients() {
   useDocumentTitle('Patients')
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
 
   const appointments = useAsync(
@@ -80,6 +81,7 @@ export default function DoctorPatients() {
           <DataTable
             caption="Patients you have appointments with"
             rows={patients}
+            onRowClick={(p) => navigate(`/doctor/appointments/${p.lastAppointmentId}`)}
             columns={[
               {
                 key: 'name',
@@ -104,6 +106,7 @@ export default function DoctorPatients() {
                 render: (p) => (
                   <Link
                     to={`/doctor/appointments/${p.lastAppointmentId}`}
+                    onClick={(e) => e.stopPropagation()}
                     className="rounded text-sm font-medium text-forest transition-colors hover:text-forest-400 focus-ring"
                   >
                     View latest

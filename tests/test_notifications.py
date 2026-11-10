@@ -34,7 +34,7 @@ async def test_reject_notifies_patient(world):
 async def test_cancel_by_patient_notifies_doctor(world):
     await world.add_window(world.d1)
     appt = await world.book(world.p1, world.d1, "09:00", confirm=True)
-    r = await world.api("POST", f"/appointments/{appt['id']}/cancel", world.p1, json={})
+    r = await world.api("POST", f"/appointments/{appt['id']}/cancel", world.p1, json={"reason": "Plans changed"})
     assert r.status_code == 200, r.text
     notes = await world.notifications(world.d1, "APPOINTMENT_CANCELLED")
     assert len(notes) == 1
@@ -43,7 +43,7 @@ async def test_cancel_by_patient_notifies_doctor(world):
 async def test_cancel_by_doctor_notifies_patient(world):
     await world.add_window(world.d1)
     appt = await world.book(world.p1, world.d1, "09:00", confirm=True)
-    r = await world.api("POST", f"/appointments/{appt['id']}/cancel", world.d1, json={})
+    r = await world.api("POST", f"/appointments/{appt['id']}/cancel", world.d1, json={"reason": "Doctor unavailable"})
     assert r.status_code == 200, r.text
     notes = await world.notifications(world.p1, "APPOINTMENT_CANCELLED")
     assert len(notes) == 1
@@ -53,13 +53,21 @@ async def test_reschedule_notifies_the_other_party(world):
     await world.add_window(world.d1)
     appt = await world.book(world.p1, world.d1, "09:00", confirm=True)
     new_slot = await world.slot_at(world.d1, "09:30")
-    r = await world.api("POST", f"/appointments/{appt['id']}/reschedule", world.p1, json={"new_slot_id": new_slot["id"]})
+    r = await world.api(
+        "POST",
+        f"/appointments/{appt['id']}/reschedule",
+        world.p1,
+        json={"new_slot_id": new_slot["id"], "reason": "Need later time"},
+    )
     assert r.status_code == 200, r.text
-    notes = await world.notifications(world.d1, "APPOINTMENT_RESCHEDULED")
+    notes = await world.notifications(world.d1, "RESCHEDULE_REQUESTED")
     assert len(notes) == 1
 
 
 async def test_unread_count_and_mark_read(world):
+    before = (await world.api("GET", "/notifications/unread-count", world.d1)).json()["unread"]
+    assert before == 1  # DOCTOR_VERIFIED notification sent upon activation in World.build()
+
     await world.add_window(world.d1)
     slot = await world.slot_at(world.d1, "09:00")
     r = await world.request(world.p1, slot["id"])
@@ -67,15 +75,15 @@ async def test_unread_count_and_mark_read(world):
 
     r = await world.api("GET", "/notifications/unread-count", world.d1)
     assert r.status_code == 200, r.text
-    assert r.json()["unread"] == 1
+    assert r.json()["unread"] == before + 1
 
-    notes = await world.notifications(world.d1)
+    notes = await world.notifications(world.d1, "APPOINTMENT_REQUESTED")
     r = await world.api("POST", f"/notifications/{notes[0]['id']}/read", world.d1)
     assert r.status_code == 200, r.text
     assert r.json()["is_read"] is True
 
     r = await world.api("GET", "/notifications/unread-count", world.d1)
-    assert r.json()["unread"] == 0
+    assert r.json()["unread"] == before
 
 
 async def test_mark_all_read(world):

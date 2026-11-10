@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 
+from app.core.audit_context import set_audit_actor
 from app.core.config import Settings
 from app.core.errors import ForbiddenError, UnauthorizedError
 from app.core.security import decode_access_token
@@ -44,6 +45,7 @@ async def get_current_user(
     user = await db[C.USERS].find_one({"_id": user_id, "is_active": True})
     if user is None:
         raise UnauthorizedError("Invalid authentication token", code="invalid_token")
+    set_audit_actor(str(user["_id"]), str(user["role"]))
     return user
 
 

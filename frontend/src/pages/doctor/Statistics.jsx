@@ -84,7 +84,10 @@ export default function DoctorStatistics() {
           ) : (
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={byStatus} margin={{ top: 8, right: 8, bottom: 8, left: -18 }}>
+                <BarChart
+                  data={byStatus}
+                  margin={{ top: 8, right: 8, bottom: byStatus.length > 3 ? 20 : 8, left: -18 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="#E4E7DF" vertical={false} />
                   <XAxis
                     dataKey="label"
@@ -92,6 +95,9 @@ export default function DoctorStatistics() {
                     axisLine={{ stroke: '#E4E7DF' }}
                     tickLine={false}
                     interval={0}
+                    angle={byStatus.length > 3 ? -15 : 0}
+                    textAnchor={byStatus.length > 3 ? 'end' : 'middle'}
+                    height={byStatus.length > 3 ? 48 : 30}
                   />
                   <YAxis
                     allowDecimals={false}

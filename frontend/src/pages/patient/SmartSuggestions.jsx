@@ -4,6 +4,7 @@ import { ArrowRight, Plus, Sparkles, X } from 'lucide-react'
 import { PageHeader } from '../../components/Topbar'
 import { MedicalDisclaimer } from '../../components/MedicalDisclaimer'
 import { ScoreBreakdown } from '../../components/ScoreBreakdown'
+import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
 import { Select } from '../../components/ui/Field'
@@ -199,16 +200,15 @@ export default function SmartSuggestions() {
               )}
 
               {result.ignored_inputs?.length > 0 && (
-                <div className="rounded-xl border border-warn/30 bg-warn-soft px-4 py-3">
-                  <p className="text-sm font-medium text-forest-700">Some input was not used</p>
-                  <ul className="mt-1.5 space-y-1 text-xs text-ink-muted">
+                <Alert tone="warn" title="Some input was not used">
+                  <ul className="mt-1 space-y-1 text-xs">
                     {result.ignored_inputs.map((i) => (
                       <li key={i.input}>
-                        <span className="font-medium">{i.input}</span> — {i.reason}
+                        <span className="font-medium text-forest-800">{i.input}</span> — {i.reason}
                       </li>
                     ))}
                   </ul>
-                </div>
+                </Alert>
               )}
             </CardBody>
           </Card>

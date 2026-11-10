@@ -131,6 +131,7 @@ class DoctorStatistics(ResponseModel):
     confirmed_appointments: int
     completed_appointments: int
     total_patients: int
+    pending_reschedule_requests: int = 0
 
 
 class DoctorAffiliationUpdate(RequestModel):

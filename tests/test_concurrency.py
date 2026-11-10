@@ -38,7 +38,7 @@ async def test_concurrent_accept_and_cancel_only_one_wins(world):
 
     results = await asyncio.gather(
         world.api("POST", f"/appointments/{appt_id}/accept", world.d1, json={}),
-        world.api("POST", f"/appointments/{appt_id}/cancel", world.p1, json={}),
+        world.api("POST", f"/appointments/{appt_id}/cancel", world.p1, json={"reason": "Plans changed"}),
         return_exceptions=True,
     )
     statuses = sorted(r.status_code for r in results if not isinstance(r, Exception))

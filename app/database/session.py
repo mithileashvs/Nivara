@@ -6,6 +6,7 @@ supporting PostgreSQL (Supabase / asyncpg) and SQLite (aiosqlite).
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import logging
 import re
@@ -59,7 +60,7 @@ def _normalize_row(row_dict: dict[str, Any], table_name: str) -> dict[str, Any]:
     for k, v in out.items():
         if k in ("department_ids", "hospital_ids", "consultation_types", "documents",
                  "keywords", "notified_slot_ids", "managed_hospital_ids", "location",
-                 "contact", "basic_information", "data") and isinstance(v, str):
+                 "contact", "basic_information", "data", "metadata") and isinstance(v, str):
             try:
                 out[k] = json.loads(v)
             except Exception:
@@ -81,10 +82,19 @@ def _is_valid_uuid(val: Any) -> bool:
 
 
 class TableRepository:
-    def __init__(self, db: Database, table: Table, name: str) -> None:
+    def __init__(self, db: Database, table: Table, name: str, conn: AsyncConnection | None = None) -> None:
         self.db = db
         self.table = table
         self.name = name
+        self.conn = conn
+
+    @asynccontextmanager
+    async def _get_conn(self):
+        if self.conn is not None:
+            yield self.conn
+        else:
+            async with self.db.connect() as conn:
+                yield conn
 
     def _build_criterion(self, key: str, value: Any) -> Any:
         col_name = "id" if key == "_id" else key
@@ -213,7 +223,7 @@ class TableRepository:
 
     async def find_one(self, filter_dict: dict[str, Any], projection: dict[str, Any] | None = None) -> dict[str, Any] | None:
         stmt = select(self.table).where(self._build_where(filter_dict)).limit(1)
-        async with self.db.connect() as conn:
+        async with self._get_conn() as conn:
             result = await conn.execute(stmt)
             row = result.mappings().first()
             if row is None:
@@ -222,7 +232,7 @@ class TableRepository:
 
     async def count_documents(self, filter_dict: dict[str, Any]) -> int:
         stmt = select(func.count()).select_from(self.table).where(self._build_where(filter_dict))
-        async with self.db.connect() as conn:
+        async with self._get_conn() as conn:
             result = await conn.execute(stmt)
             return result.scalar_one() or 0
 
@@ -250,12 +260,14 @@ class TableRepository:
                 filtered_data[k] = _serialize_for_db(v)
 
         stmt = self.table.insert().values(**filtered_data)
-        async with self.db.connect() as conn:
+        async with self._get_conn() as conn:
             try:
                 await conn.execute(stmt)
-                await conn.commit()
+                if self.conn is None:
+                    await conn.commit()
             except IntegrityError as exc:
-                await conn.rollback()
+                if self.conn is None:
+                    await conn.rollback()
                 raise DuplicateKeyError(str(exc)) from exc
         return InsertOneResult(data["id"])
 
@@ -314,9 +326,10 @@ class TableRepository:
             .where(self.table.c.id == target["id"])
             .values(**values_to_update)
         )
-        async with self.db.connect() as conn:
+        async with self._get_conn() as conn:
             await conn.execute(stmt)
-            await conn.commit()
+            if self.conn is None:
+                await conn.commit()
         return UpdateResult(matched=1, modified=1)
 
     async def update_many(self, filter_dict: dict[str, Any], update_dict: dict[str, Any]) -> UpdateResult:
@@ -334,9 +347,10 @@ class TableRepository:
             .where(self._build_where(filter_dict))
             .values(**values_to_update)
         )
-        async with self.db.connect() as conn:
+        async with self._get_conn() as conn:
             res = await conn.execute(stmt)
-            await conn.commit()
+            if self.conn is None:
+                await conn.commit()
             count = res.rowcount if res.rowcount is not None and res.rowcount >= 0 else 0
             return UpdateResult(matched=count, modified=count)
 
@@ -347,7 +361,7 @@ class TableRepository:
         return_document: Any = True,
     ) -> dict[str, Any] | None:
         """Atomic conditional update using SQL UPDATE ... RETURNING *.
-        
+
         Guarantees that state transitions only occur when the row matches the exact filter conditions.
         Returns the updated row, or None if the condition was not met (conflict / concurrency loser).
         """
@@ -367,13 +381,15 @@ class TableRepository:
             .values(**values_to_update)
             .returning(self.table)
         )
-        async with self.db.connect() as conn:
+        async with self._get_conn() as conn:
             try:
                 res = await conn.execute(stmt)
                 row = res.mappings().first()
-                await conn.commit()
+                if self.conn is None:
+                    await conn.commit()
             except IntegrityError as exc:
-                await conn.rollback()
+                if self.conn is None:
+                    await conn.rollback()
                 raise DuplicateKeyError(str(exc)) from exc
             if row is None:
                 return None
@@ -382,17 +398,19 @@ class TableRepository:
     async def delete_one(self, filter_dict: dict[str, Any]) -> DeleteResult:
         subq = select(self.table.c.id).where(self._build_where(filter_dict)).limit(1).scalar_subquery()
         stmt = self.table.delete().where(self.table.c.id == subq)
-        async with self.db.connect() as conn:
+        async with self._get_conn() as conn:
             res = await conn.execute(stmt)
-            await conn.commit()
+            if self.conn is None:
+                await conn.commit()
             count = res.rowcount if res.rowcount is not None and res.rowcount >= 0 else 0
             return DeleteResult(deleted_count=count)
 
     async def delete_many(self, filter_dict: dict[str, Any]) -> DeleteResult:
         stmt = self.table.delete().where(self._build_where(filter_dict))
-        async with self.db.connect() as conn:
+        async with self._get_conn() as conn:
             res = await conn.execute(stmt)
-            await conn.commit()
+            if self.conn is None:
+                await conn.commit()
             count = res.rowcount if res.rowcount is not None and res.rowcount >= 0 else 0
             return DeleteResult(deleted_count=count)
 
@@ -439,7 +457,7 @@ class QueryCursor:
         if limit is not None:
             stmt = stmt.limit(limit)
 
-        async with self.repo.db.connect() as conn:
+        async with self.repo._get_conn() as conn:
             result = await conn.execute(stmt)
             rows = result.mappings().all()
             return [_normalize_row(dict(r), self.repo.name) for r in rows]
@@ -498,11 +516,12 @@ class DeleteResult:
 class Database:
     """Async database abstraction providing access to tables by name or attribute."""
 
-    def __init__(self, engine: AsyncEngine) -> None:
+    def __init__(self, engine: AsyncEngine, conn: AsyncConnection | None = None) -> None:
         self.engine = engine
+        self._conn = conn
         self._repos: dict[str, TableRepository] = {}
         for name, table in TABLE_MAP.items():
-            self._repos[name] = TableRepository(self, table, name)
+            self._repos[name] = TableRepository(self, table, name, conn=self._conn)
 
     def __getitem__(self, name: str) -> TableRepository:
         if name in self._repos:
@@ -517,6 +536,22 @@ class Database:
     def connect(self) -> AsyncConnection:
         return self.engine.connect()
 
+    @asynccontextmanager
+    async def transaction(self):
+        """Execute a block within an atomic transaction.
+
+        If already in a transaction (self._conn is set), uses a SAVEPOINT (begin_nested).
+        Otherwise checks out a connection and begins an outer transaction.
+        """
+        if self._conn is not None:
+            async with self._conn.begin_nested():
+                yield self
+        else:
+            async with self.engine.connect() as conn:
+                async with conn.begin():
+                    tx_db = Database(self.engine, conn=conn)
+                    yield tx_db
+
     async def ensure_indexes(self) -> None:
         async with self.engine.begin() as conn:
             await conn.run_sync(metadata.create_all)
@@ -529,6 +564,22 @@ class Database:
                 await conn.execute(text(
                     "CREATE UNIQUE INDEX IF NOT EXISTS uq_appointments_active_patient_start "
                     "ON appointments (patient_id, start_at) WHERE is_active = TRUE;"
+                ))
+                await conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_reschedule_active_appointment "
+                    "ON rescheduling_requests (appointment_id) WHERE status = 'REQUESTED';"
+                ))
+                await conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_waitlist_offers_pending_slot "
+                    "ON waitlist_offers (slot_id) WHERE status = 'PENDING';"
+                ))
+                await conn.execute(text(
+                    "DO $$ BEGIN "
+                    "  ALTER TABLE appointments DROP CONSTRAINT IF EXISTS ck_appointments_status; "
+                    "  ALTER TABLE appointments ADD CONSTRAINT ck_appointments_status "
+                    "  CHECK (status IN ('REQUESTED', 'CONFIRMED', 'REJECTED', 'CANCELLED', 'COMPLETED', 'NO_SHOW', 'RESCHEDULE_REQUESTED')); "
+                    "EXCEPTION WHEN OTHERS THEN NULL; "
+                    "END $$;"
                 ))
 
     async def command(self, cmd: str) -> Any:

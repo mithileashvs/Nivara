@@ -17,7 +17,7 @@ export function DoctorCard({ doctor, hospitalNames = [], slots = null, slotsLoad
   const closed = doctor.availability_status === 'CLOSED'
 
   return (
-    <article className="card p-5 transition-colors hover:border-forest-200">
+    <article className="card-interactive p-5">
       <div className="flex flex-wrap items-start gap-4">
         <Avatar name={doctor.name} size="lg" />
 

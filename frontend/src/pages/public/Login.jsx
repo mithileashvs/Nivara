@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react'
 import { AuthLayout } from '../../layouts/AuthLayout'
+import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { Checkbox } from '../../components/ui/Field'
 import { ErrorState } from '../../components/ui/States'
@@ -80,9 +81,9 @@ export default function Login() {
       }
     >
       {sessionEnded && (
-        <p className="mb-5 rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-forest-700" role="status">
+        <Alert tone="warn" className="mb-5">
           Your session ended. Sign in again to pick up where you left off.
-        </p>
+        </Alert>
       )}
 
       <div role="tablist" aria-label="Account type" className="mb-6 grid grid-cols-3 gap-1 rounded-xl bg-forest-50 p-1">
@@ -126,7 +127,7 @@ export default function Login() {
               }`}
             />
           </div>
-          {invalid.email && <p className="mt-1.5 text-xs text-danger">{invalid.email}</p>}
+          {invalid.email && <p role="alert" className="mt-1.5 text-xs text-danger">{invalid.email}</p>}
         </div>
 
         <div>
@@ -158,7 +159,7 @@ export default function Login() {
               {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
           </div>
-          {invalid.password && <p className="mt-1.5 text-xs text-danger">{invalid.password}</p>}
+          {invalid.password && <p role="alert" className="mt-1.5 text-xs text-danger">{invalid.password}</p>}
         </div>
 
         <Checkbox

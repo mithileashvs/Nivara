@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Building2, CalendarDays, Clock, History, Star, Stethoscope } from 'lucide-react'
 import { PageHeader } from '../../components/Topbar'
+import { Alert } from '../../components/ui/Alert'
 import { Avatar } from '../../components/ui/Avatar'
 import { Button } from '../../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
@@ -20,7 +21,7 @@ import {
 } from '../../api/appointments'
 import { searchSlots } from '../../api/slots'
 import { createReview, listMyReviews } from '../../api/reviews'
-import { APPOINTMENT_STATUS, CONSULTATION_LABEL, MAX_PAGE_SIZE } from '../../utils/constants'
+import { APPOINTMENT_STATUS, CANCELLATION_REASONS, CONSULTATION_LABEL, MAX_PAGE_SIZE } from '../../utils/constants'
 import { addDays, formatDate, formatInstant, formatTimeRange, humanise, todayString } from '../../utils/format'
 import { errorMessage } from '../../utils/errors'
 
@@ -42,7 +43,8 @@ export default function AppointmentDetail() {
   const history = useAsync(() => getAppointmentHistory(appointmentId), [appointmentId])
 
   const [cancelOpen, setCancelOpen] = useState(false)
-  const [cancelReason, setCancelReason] = useState('')
+  const [cancelReasonType, setCancelReasonType] = useState('Personal reasons')
+  const [customCancelReason, setCustomCancelReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [rescheduleOpen, setRescheduleOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -61,15 +63,20 @@ export default function AppointmentDetail() {
   if (appointment.error) return <ErrorState error={appointment.error} onRetry={appointment.reload} />
 
   const notStarted = new Date(a.start_at) > new Date()
-  const isOpen = [APPOINTMENT_STATUS.REQUESTED, APPOINTMENT_STATUS.CONFIRMED].includes(a.status)
-  const canCancel = isOpen && notStarted
-  const canReschedule = isOpen && notStarted
+  const canCancel = [APPOINTMENT_STATUS.REQUESTED, APPOINTMENT_STATUS.CONFIRMED, APPOINTMENT_STATUS.RESCHEDULE_REQUESTED].includes(a.status) && notStarted
+  const canReschedule = a.status === APPOINTMENT_STATUS.CONFIRMED && notStarted
   const canReview = a.status === APPOINTMENT_STATUS.COMPLETED && !alreadyReviewed
 
+  const effectiveCancelReason = cancelReasonType === 'Other' ? customCancelReason.trim() : cancelReasonType
+
   const doCancel = async () => {
+    if (!effectiveCancelReason) {
+      toast.error('Please specify a cancellation reason.')
+      return
+    }
     setBusy(true)
     try {
-      await cancelAppointment(a.id, cancelReason.trim() || undefined)
+      await cancelAppointment(a.id, effectiveCancelReason)
       toast.success('Appointment cancelled.')
       setCancelOpen(false)
       appointment.reload()
@@ -97,16 +104,22 @@ export default function AppointmentDetail() {
       />
 
       {a.status === APPOINTMENT_STATUS.REQUESTED && (
-        <p className="rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-forest-700">
+        <Alert tone="warn">
           Your time is held while {a.doctor_name} reviews this request. You will be notified as soon
           as they accept or decline it.
-        </p>
+        </Alert>
+      )}
+      {a.status === APPOINTMENT_STATUS.RESCHEDULE_REQUESTED && (
+        <Alert tone="warn" title="Rescheduling request pending">
+          You requested to move this appointment to a new time. Dr. {a.doctor_name} will review your request.
+          Your original booking for {formatDate(a.appointment_date)} at {formatTimeRange(a.start_time, a.end_time)} remains confirmed until the new slot is approved.
+        </Alert>
       )}
       {a.status_reason && (
-        <p className="rounded-xl border border-line bg-forest-50/60 px-4 py-3 text-sm text-ink-muted">
+        <Alert tone="neutral">
           <span className="font-medium text-forest-700">Note from the clinic: </span>
           {a.status_reason}
-        </p>
+        </Alert>
       )}
 
       <Card>
@@ -192,6 +205,13 @@ export default function AppointmentDetail() {
                   <p className="mt-0.5 text-xs text-ink-muted">
                     by {humanise(h.changed_by_role)} · {formatInstant(h.created_at)}
                   </p>
+                  {(h.previous_date || h.new_date) && (
+                    <p className="mt-1 text-xs font-medium text-forest-600">
+                      {h.previous_date && `Previous: ${formatDate(h.previous_date)} ${h.previous_time || ''}`}
+                      {h.previous_date && h.new_date && ' → '}
+                      {h.new_date && `New: ${formatDate(h.new_date)} ${h.new_time || ''}`}
+                    </p>
+                  )}
                   {h.reason && <p className="mt-1 text-sm text-ink-muted">{h.reason}</p>}
                 </div>
               </li>
@@ -205,6 +225,7 @@ export default function AppointmentDetail() {
         onClose={() => setCancelOpen(false)}
         onConfirm={doCancel}
         loading={busy}
+        disabled={!effectiveCancelReason}
         tone="danger"
         title="Cancel this appointment?"
         confirmLabel="Cancel appointment"
@@ -212,15 +233,24 @@ export default function AppointmentDetail() {
       >
         <div className="space-y-4">
           <p className="text-sm text-ink-muted">
-            The time is released straight away and offered to anyone waiting for it.
+            The time is released immediately. Cancellation requires a reason.
           </p>
-          <Textarea
-            label="Reason (optional)"
-            value={cancelReason}
-            onChange={(e) => setCancelReason(e.target.value)}
-            rows={3}
-            maxLength={300}
+          <Select
+            label="Cancellation reason"
+            value={cancelReasonType}
+            onChange={(e) => setCancelReasonType(e.target.value)}
+            options={CANCELLATION_REASONS}
           />
+          {cancelReasonType === 'Other' && (
+            <Textarea
+              label="Please describe your reason"
+              value={customCancelReason}
+              onChange={(e) => setCustomCancelReason(e.target.value)}
+              placeholder="Provide a brief explanation for cancelling..."
+              rows={3}
+              maxLength={300}
+            />
+          )}
         </div>
       </ConfirmationModal>
 
@@ -264,6 +294,7 @@ function Row({ icon: Icon, label, value }) {
 /** Reschedule is restricted to other slots of the same doctor — that is the backend rule. */
 function RescheduleModal({ open, onClose, appointment, onDone }) {
   const toast = useToast()
+  const { hospitalName, departmentName } = useDirectory()
   const [date, setDate] = useState(appointment.appointment_date)
   const [slotId, setSlotId] = useState(null)
   const [reason, setReason] = useState('')
@@ -296,10 +327,14 @@ function RescheduleModal({ open, onClose, appointment, onDone }) {
   )
 
   const submit = async () => {
+    if (!reason.trim()) {
+      toast.error('Please enter a reason for rescheduling.')
+      return
+    }
     setBusy(true)
     try {
-      await rescheduleAppointment(appointment.id, slotId, reason.trim() || undefined)
-      toast.success('Moved. Your doctor needs to confirm the new time.')
+      await rescheduleAppointment(appointment.id, slotId, reason.trim())
+      toast.success('Rescheduling request submitted. Your doctor will review the new time.')
       onDone()
     } catch (err) {
       toast.error(errorMessage(err))
@@ -312,39 +347,51 @@ function RescheduleModal({ open, onClose, appointment, onDone }) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Move this appointment"
-      description={`Choose another time with ${appointment.doctor_name}.`}
+      title="Request appointment reschedule"
+      description={`Select a new available time with ${appointment.doctor_name}.`}
       size="lg"
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
             Keep current time
           </Button>
-          <Button onClick={submit} loading={busy} disabled={!slotId}>
-            Request new time
+          <Button onClick={submit} loading={busy} disabled={!slotId || !reason.trim()}>
+            Submit rescheduling request
           </Button>
         </>
       }
     >
       <div className="space-y-5">
-        <p className="rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-forest-700">
-          Moving an appointment sends it back for approval. It returns to awaiting a decision until
-          your doctor confirms the new time.
-        </p>
+        <div className="rounded-xl border border-line bg-forest-50/50 p-3.5 text-xs text-forest-700">
+          <p className="font-semibold text-sm text-forest-800">Current appointment</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-ink-muted">
+            <p><span className="font-medium text-forest-700">Doctor:</span> {appointment.doctor_name}</p>
+            <p><span className="font-medium text-forest-700">Hospital:</span> {hospitalName(appointment.hospital_id) || '—'}</p>
+            <p><span className="font-medium text-forest-700">Department:</span> {departmentName(appointment.department_id) || '—'}</p>
+            <p><span className="font-medium text-forest-700">Scheduled for:</span> {formatDate(appointment.appointment_date)} at {formatTimeRange(appointment.start_time, appointment.end_time)}</p>
+          </div>
+        </div>
+
+        <Alert tone="warn" className="text-xs">
+          Submitting a request holds the new slot while your doctor reviews it. Your existing booking remains safe and confirmed until the doctor approves the change.
+        </Alert>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <Calendar
-            value={date}
-            onChange={(v) => {
-              setDate(v)
-              setSlotId(null)
-            }}
-            availableDates={availableDates}
-            minDate={from}
-            maxDate={to}
-          />
           <div>
-            <p className="mb-2 text-sm font-medium text-forest-700">{formatDate(date)}</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-muted">1. Choose new date</p>
+            <Calendar
+              value={date}
+              onChange={(v) => {
+                setDate(v)
+                setSlotId(null)
+              }}
+              availableDates={availableDates}
+              minDate={from}
+              maxDate={to}
+            />
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-muted">2. Choose time slot ({formatDate(date)})</p>
             <SlotSelector
               slots={daySlots}
               value={slotId}
@@ -357,9 +404,10 @@ function RescheduleModal({ open, onClose, appointment, onDone }) {
         </div>
 
         <Textarea
-          label="Reason (optional)"
+          label="Reason for rescheduling (required)"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
+          placeholder="Please explain why you need to reschedule this appointment..."
           rows={2}
           maxLength={300}
         />

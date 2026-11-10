@@ -1,3 +1,4 @@
+import { Alert } from '../../components/ui/Alert'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 
 /* There is no contact-form or messaging endpoint on this backend, so this page
@@ -26,12 +27,9 @@ export default function Contact() {
             accounts and doctor profiles.
           </dd>
         </div>
-        <div className="card border-danger/30 bg-danger-soft p-5">
-          <dt className="text-sm font-semibold text-forest-700">In an emergency</dt>
-          <dd className="mt-1.5 text-sm leading-relaxed text-ink-muted">
-            Do not use Nivara. Contact your local emergency services immediately.
-          </dd>
-        </div>
+        <Alert tone="danger" title="In an emergency">
+          Do not use Nivara. Contact your local emergency services immediately.
+        </Alert>
       </dl>
     </div>
   )

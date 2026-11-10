@@ -104,7 +104,7 @@ export default function Landing() {
       <section aria-label="What Nivara offers" className="mx-auto w-full max-w-[80rem] px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
         <ul className="grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map(({ icon: Icon, title, body }) => (
-            <li key={title} className="bg-canvas px-6 py-8 text-center">
+            <li key={title} className="bg-canvas px-6 py-8 text-center transition-colors hover:bg-surface">
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-forest-50 text-forest-500">
                 <Icon size={21} aria-hidden="true" />
               </span>

@@ -48,12 +48,15 @@ import HospitalDetail from '../pages/admin/HospitalDetail'
 import AdminDepartments from '../pages/admin/Departments'
 import AdminAppointments from '../pages/admin/Appointments'
 import AdminRoutingRules from '../pages/admin/RoutingRules'
+import AuditLogs from '../pages/admin/AuditLogs'
+import SecurityActivity from '../pages/admin/SecurityActivity'
 
 // hospital administrator
 import HospitalDashboard from '../pages/hospital/Dashboard'
 import HospitalDoctors from '../pages/hospital/Doctors'
 import HospitalDepartments from '../pages/hospital/Departments'
 import HospitalAppointments from '../pages/hospital/Appointments'
+import AnalyticsWorkspace from '../pages/analytics/AnalyticsWorkspace'
 
 /**
  * Route map. Guards mirror the backend's own authorisation so people are not
@@ -138,6 +141,9 @@ export function AppRoutes() {
           }
         >
           <Route index element={<AdminDashboard />} />
+          <Route path="analytics/*" element={<AnalyticsWorkspace />} />
+          <Route path="audit-logs" element={<AuditLogs />} />
+          <Route path="security" element={<SecurityActivity />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="doctors" element={<AdminDoctors />} />
           <Route path="hospitals" element={<AdminHospitals />} />
@@ -162,6 +168,10 @@ export function AppRoutes() {
           }
         >
           <Route index element={<HospitalDashboard />} />
+          <Route path="analytics/*" element={<AnalyticsWorkspace />} />
+          <Route path="audit-logs" element={<AuditLogs />} />
+          <Route path="security" element={<SecurityActivity />} />
+          <Route path="hospitals" element={<AdminHospitals />} />
           <Route path="doctors" element={<HospitalDoctors />} />
           <Route path="departments" element={<HospitalDepartments />} />
           <Route path="hospitals/:hospitalId" element={<HospitalDetail basePath="/hospital" />} />

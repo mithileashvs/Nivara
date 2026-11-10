@@ -57,3 +57,12 @@ async def token(form: Annotated[OAuth2PasswordRequestForm, Depends()], db: DB, s
 )
 async def me(user: CurrentUser) -> Any:
     return to_api(user)
+
+
+@router.post(
+    "/logout", summary="Log out and record audit trail",
+    description="Logs the user sign-out event in centralized audit logs. **Auth:** any role.",
+    responses=errs(401),
+)
+async def logout(user: CurrentUser, db: DB, settings: SettingsDep) -> dict[str, str]:
+    return await AuthService(db, settings).logout(user)

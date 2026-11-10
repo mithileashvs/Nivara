@@ -299,7 +299,7 @@ export default function Register() {
             checked={agreed}
             onChange={(e) => setAgreed(e.target.checked)}
           />
-          {errorFor('agreed') && <p className="mt-1.5 text-xs text-danger">{errorFor('agreed')}</p>}
+          {errorFor('agreed') && <p role="alert" className="mt-1.5 text-xs text-danger">{errorFor('agreed')}</p>}
         </div>
 
         <Button type="submit" size="lg" loading={submitting} className="w-full justify-center">
@@ -337,7 +337,7 @@ function IconInput({ icon: Icon, id, label, error, hint, trailing, required, ...
         {trailing && <span className="absolute right-3 top-1/2 -translate-y-1/2">{trailing}</span>}
       </div>
       {error ? (
-        <p className="mt-1.5 text-xs text-danger">{error}</p>
+        <p role="alert" className="mt-1.5 text-xs text-danger">{error}</p>
       ) : hint ? (
         <p className="mt-1.5 text-xs text-ink-muted">{hint}</p>
       ) : null}

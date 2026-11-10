@@ -1,6 +1,7 @@
 import {
   LayoutDashboard, Search, CalendarDays, FileText, Bell, User, LifeBuoy, Stethoscope,
   Users, Building2, LayoutGrid, BarChart3, Clock, Sparkles, ListChecks, ShieldCheck, Hospital,
+  ScrollText, ShieldAlert,
 } from 'lucide-react'
 
 /** Sidebar entries per role. `exact` marks index routes so the highlight is accurate. */
@@ -31,6 +32,9 @@ export const doctorNav = [
 
 export const adminNav = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
+  { to: '/admin/audit-logs', label: 'Audit logs', icon: ScrollText },
+  { to: '/admin/security', label: 'Security activity', icon: ShieldAlert },
   { to: '/admin/users', label: 'Users', icon: Users },
   { to: '/admin/doctors', label: 'Doctors', icon: Stethoscope },
   { to: '/admin/hospitals', label: 'Hospitals', icon: Building2 },
@@ -44,6 +48,10 @@ export const adminNav = [
  *  The backend refuses platform-wide endpoints for them, so those links are absent. */
 export const hospitalNav = [
   { to: '/hospital', label: 'Dashboard', icon: Hospital, exact: true },
+  { to: '/hospital/analytics', label: 'Analytics', icon: BarChart3 },
+  { to: '/hospital/audit-logs', label: 'Audit logs', icon: ScrollText },
+  { to: '/hospital/security', label: 'Security activity', icon: ShieldAlert },
+  { to: '/hospital/hospitals', label: 'Hospitals', icon: Building2 },
   { to: '/hospital/departments', label: 'Departments', icon: LayoutGrid },
   { to: '/hospital/doctors', label: 'Doctors', icon: Stethoscope },
   { to: '/hospital/appointments', label: 'Appointments', icon: CalendarDays },

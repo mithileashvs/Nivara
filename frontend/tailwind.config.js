@@ -5,7 +5,11 @@ export default {
     extend: {
       colors: {
         canvas: '#F8F8F3',
-        surface: '#FFFFFF',
+        surface: {
+          DEFAULT: '#FFFFFF',
+          muted: '#F4F5EF',
+          sunken: '#ECEEE6',
+        },
         forest: {
           DEFAULT: '#173C2B',
           50: '#EEF3F0',
@@ -45,8 +49,9 @@ export default {
       },
       borderRadius: { xl: '0.875rem', '2xl': '1.25rem', '3xl': '1.75rem' },
       boxShadow: {
-        card: '0 1px 2px rgba(23,60,43,0.04), 0 8px 24px -16px rgba(23,60,43,0.18)',
-        lift: '0 2px 4px rgba(23,60,43,0.05), 0 18px 40px -22px rgba(23,60,43,0.28)',
+        card: '0 1px 2px rgba(23,60,43,0.04), 0 8px 24px -16px rgba(23,60,43,0.16)',
+        'card-hover': '0 4px 12px rgba(23,60,43,0.06), 0 14px 32px -18px rgba(23,60,43,0.24)',
+        lift: '0 4px 10px rgba(23,60,43,0.06), 0 20px 44px -20px rgba(23,60,43,0.28)',
       },
       keyframes: {
         'fade-in': { from: { opacity: 0 }, to: { opacity: 1 } },

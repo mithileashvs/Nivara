@@ -40,6 +40,26 @@ export const markNoShow = (id, reason) =>
   api.post(`/appointments/${id}/no-show`, clean({ reason })).then((r) => r.data)
 
 /** POST /appointments/{id}/reschedule — new slot must belong to the same doctor.
- *  Patient reschedule returns the appointment to REQUESTED (doctor must approve again). */
+ *  Patient reschedule requests a new slot (doctor must approve). Doctor reschedule moves directly. */
 export const rescheduleAppointment = (id, new_slot_id, reason) =>
   api.post(`/appointments/${id}/reschedule`, clean({ new_slot_id, reason })).then((r) => r.data)
+
+/** GET /appointments/{id}/reschedule-requests — list all reschedule requests for an appointment. */
+export const getAppointmentRescheduleRequests = (id) =>
+  api.get(`/appointments/${id}/reschedule-requests`).then((r) => r.data)
+
+/** GET /doctors/me/reschedule-requests — DOCTOR only. List pending/all reschedule requests. */
+export const listDoctorRescheduleRequests = (params) =>
+  api.get('/doctors/me/reschedule-requests', { params: clean(params) }).then((r) => r.data)
+
+/** POST /reschedule-requests/{requestId}/approve — DOCTOR only. Approves the new slot atomically. */
+export const approveRescheduleRequest = (requestId, reason) =>
+  api.post(`/reschedule-requests/${requestId}/approve`, clean({ reason })).then((r) => r.data)
+
+/** POST /reschedule-requests/{requestId}/reject — DOCTOR only. Rejects the request, keeps original slot. */
+export const rejectRescheduleRequest = (requestId, reason) =>
+  api.post(`/reschedule-requests/${requestId}/reject`, clean({ reason })).then((r) => r.data)
+
+/** GET /reschedule-requests/{requestId} — fetch a specific reschedule request. */
+export const getRescheduleRequest = (requestId) =>
+  api.get(`/reschedule-requests/${requestId}`).then((r) => r.data)

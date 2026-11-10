@@ -9,3 +9,13 @@ export const login = (email, password) =>
 
 /** GET /auth/me → UserOut for the bearer token. */
 export const me = () => api.get('/auth/me').then((r) => r.data)
+
+/** POST /auth/logout → records authenticated logout in centralized audit logs. */
+export const logout = (token) =>
+  api
+    .post(
+      '/auth/logout',
+      null,
+      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+    )
+    .then((r) => r.data)

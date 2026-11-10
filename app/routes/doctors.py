@@ -6,12 +6,16 @@ from app.core.dependencies import DB, CurrentUser, DoctorCtx, SettingsDep
 from app.core.errors import ForbiddenError
 from app.models.enums import UserRole
 from app.routes.docs import errs
+from app.schemas.appointments import ReschedulingRequestOut
 from app.schemas.common import Page, make_page
+from app.schemas.engagement import DoctorWaitlistStats, WaitlistOut
 from app.schemas.scheduling import AvailabilityCreate, AvailabilityCreateResponse, AvailabilityOut
 from app.schemas.users import DoctorIntakeUpdate, DoctorOut, DoctorPublicOut, DoctorSearchParams, DoctorStatistics, DoctorUpdate
+from app.services.appointment_service import AppointmentService
 from app.services.availability_service import AvailabilityService
 from app.services.doctor_service import DoctorService, doctor_view
 from app.services.hospital_service import can_manage_hospital
+from app.services.waitlist_service import WaitlistService
 from app.utils.object_id import ObjectIdPath
 from app.utils.pagination import PageParams, page_params
 from app.utils.serialization import to_api
@@ -51,6 +55,33 @@ async def get_my_statistics(ctx: DoctorCtx, db: DB, settings: SettingsDep) -> An
     return await DoctorService(db, settings).get_statistics(ctx.doctor)
 
 
+@router.get("/me/reschedule-requests", response_model=Page[ReschedulingRequestOut], summary="List my patient rescheduling requests",
+            description="All rescheduling requests submitted for appointments assigned to the doctor. **Auth:** DOCTOR.",
+            responses=errs(401, 403, 422))
+async def list_doctor_reschedule_requests(
+    ctx: DoctorCtx, db: DB, settings: SettingsDep, params: Annotated[PageParams, Depends(page_params)], status: str | None = None
+) -> Any:
+    items, total = await AppointmentService(db, settings).list_reschedule_requests_for_doctor(ctx.actor, params, status=status)
+    return make_page([to_api(i) for i in items], total, params.page, params.page_size)
+
+
+@router.get("/me/waitlist/statistics", response_model=DoctorWaitlistStats, summary="My waitlist statistics",
+            description="Active waitlisted patients, pending offers, and fulfilled entries. **Auth:** DOCTOR.",
+            responses=errs(401, 403))
+async def get_my_waitlist_statistics(ctx: DoctorCtx, db: DB, settings: SettingsDep) -> Any:
+    return await WaitlistService(db, settings).get_doctor_waitlist_stats(ctx.doctor["_id"])
+
+
+@router.get("/me/waitlist", response_model=Page[WaitlistOut], summary="List patients currently on my waitlist",
+            description="Active waitlist queue for the doctor's slots. **Auth:** DOCTOR.",
+            responses=errs(401, 403, 422))
+async def list_doctor_waitlist(
+    ctx: DoctorCtx, db: DB, settings: SettingsDep, params: Annotated[PageParams, Depends(page_params)]
+) -> Any:
+    items, total = await WaitlistService(db, settings).list_for_doctor(ctx.doctor["_id"], params)
+    return make_page([to_api(i) for i in items], total, params.page, params.page_size)
+
+
 @router.post("/me/availability", response_model=AvailabilityCreateResponse, status_code=201, summary="Add a working window or time off",
              description=("`status=WORKING` generates appointment slots (idempotent). `status=BLOCKED` blocks overlapping FREE slots — slots that already "
                           "have pending/confirmed appointments are left untouched. Requires an ACTIVE, affiliated profile. **Auth:** DOCTOR (own schedule only)."),
@@ -88,7 +119,7 @@ async def set_intake(doctor_id: ObjectIdPath, payload: DoctorIntakeUpdate, user:
     )
     if not (is_self or is_admin):
         raise ForbiddenError("You cannot change this doctor's intake status", code="forbidden_role")
-    updated, _ = await svc.set_intake(doctor_id, payload.availability_status)
+    updated, _ = await svc.set_intake(doctor_id, payload.availability_status, actor=user, reason=payload.reason)
     return to_api(updated)
 
 

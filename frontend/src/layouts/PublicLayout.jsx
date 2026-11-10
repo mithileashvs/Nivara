@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import { Logo } from '../components/Logo'
@@ -17,6 +17,15 @@ const LINKS = [
 export function PublicLayout() {
   const { user, isAuthenticated } = useAuth()
   const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open])
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
@@ -37,7 +46,9 @@ export function PublicLayout() {
                 end={l.exact}
                 className={({ isActive }) =>
                   `rounded-lg px-3 py-2 text-sm transition-colors focus-ring ${
-                    isActive ? 'font-semibold text-forest-700' : 'text-ink-muted hover:text-forest-700'
+                    isActive
+                      ? 'bg-forest-50 font-semibold text-forest-700'
+                      : 'text-ink-muted hover:bg-forest-50/50 hover:text-forest-700'
                   }`
                 }
               >
@@ -104,17 +115,17 @@ export function PublicLayout() {
             </nav>
             <div className="mt-4 grid grid-cols-2 gap-2">
               {isAuthenticated ? (
-                <Link to={homePathFor(user)} className="col-span-2">
+                <Link to={homePathFor(user)} onClick={() => setOpen(false)} className="col-span-2">
                   <Button className="w-full">Go to dashboard</Button>
                 </Link>
               ) : (
                 <>
-                  <Link to="/login">
+                  <Link to="/login" onClick={() => setOpen(false)}>
                     <Button variant="outline" className="w-full">
                       Login
                     </Button>
                   </Link>
-                  <Link to="/register">
+                  <Link to="/register" onClick={() => setOpen(false)}>
                     <Button className="w-full">Sign up</Button>
                   </Link>
                 </>

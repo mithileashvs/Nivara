@@ -72,6 +72,7 @@ TAGS = [
         "description": "Department routing, doctor matching, appointment options.",
     },
     {"name": "Admin", "description": "Platform administration."},
+    {"name": "Analytics", "description": "Operational healthcare analytics and CSV reporting."},
     {"name": "Health", "description": "Liveness / readiness."},
 ]
 
@@ -126,6 +127,28 @@ def create_app(
         await DepartmentRoutingService(
             app.state.db
         ).ensure_default_rules()
+
+        # Phase 4 storage validation
+        if settings.environment == "production" and settings.document_storage_provider == "local":
+            logger.critical(
+                "====================================================================\n"
+                "CRITICAL STORAGE WARNING: PRODUCTION RUNNING WITH LOCAL FILE STORAGE\n"
+                "Cloud hosts like Render employ ephemeral filesystems. Medical files\n"
+                "stored locally will be permanently lost on redeploy or restart!\n"
+                "Configure DOCUMENT_STORAGE_PROVIDER=supabase along with SUPABASE_URL\n"
+                "and SUPABASE_SERVICE_ROLE_KEY for persistent object storage.\n"
+                "===================================================================="
+            )
+        elif settings.document_storage_provider == "supabase":
+            logger.info(
+                "Medical document storage configured: Supabase Storage (bucket: %s)",
+                settings.supabase_storage_bucket,
+            )
+        else:
+            logger.info(
+                "Medical document storage configured: Local filesystem (%s)",
+                settings.local_storage_dir,
+            )
 
         task = (
             asyncio.create_task(_background_loop(app))
